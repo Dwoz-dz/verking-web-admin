@@ -1,0 +1,1004 @@
+import { Hono } from "npm:hono";
+import { cors } from "npm:hono/cors";
+import { logger } from "npm:hono/logger";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import * as kv from "./kv_store.tsx";
+
+const app = new Hono();
+app.use('*', logger(console.log));
+app.use("/*", cors({ origin: "*", allowHeaders: ["Content-Type", "Authorization", "X-Admin-Token"], allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], exposeHeaders: ["Content-Length"], maxAge: 600 }));
+
+const db = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+);
+const MEDIA_BUCKET = 'make-ea36795c-media';
+
+// ─── TYPES ───
+interface Product { id: string; name_fr: string; name_ar: string; description_fr: string; description_ar: string; price: number; sale_price?: number; images: string[]; video_url?: string; category_id: string; stock: number; is_featured: boolean; is_new: boolean; is_best_seller: boolean; is_promo: boolean; is_active: boolean; show_on_homepage: boolean; show_in_best_sellers: boolean; show_in_new_arrivals: boolean; show_in_promotions: boolean; show_in_cartables: boolean; show_in_trousses: boolean; show_in_school_supplies: boolean; sort_order: number; created_at: string; updated_at: string; }
+interface Category { id: string; name_fr: string; name_ar: string; slug: string; image: string; order: number; is_active: boolean; }
+interface Order { id: string; order_number: string; customer_name: string; customer_phone: string; customer_email: string; customer_address: string; customer_wilaya: string; items: any[]; subtotal: number; shipping: number; total: number; payment_method: string; delivery_type: string; status: string; notes: string; created_at: string; updated_at: string; }
+interface WholesaleRequest { id: string; company_name: string; contact_name: string; phone: string; email: string; wilaya: string; message: string; status: string; created_at: string; }
+interface Banner { id: string; title_fr: string; title_ar: string; subtitle_fr: string; subtitle_ar: string; cta_fr: string; cta_ar: string; image: string; link: string; is_active: boolean; order: number; }
+interface ThemeSettings { primary_color: string; accent_color: string; bg_color: string; font_heading: string; font_body: string; button_radius: string; show_featured: boolean; show_new_arrivals: boolean; show_best_sellers: boolean; show_wholesale_section: boolean; show_testimonials: boolean; logo_text: string; logo_subtitle: string; }
+interface SiteContent { about_fr: string; about_ar: string; address: string; phone: string; email: string; working_hours: string; facebook: string; instagram: string; whatsapp: string; map_embed: string; faq: any[]; }
+interface MediaFile { id: string; filename: string; path: string; url: string; content_type: string; size: number; created_at: string; }
+
+// ─── HELPERS ───
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+function respond(c: any, data: any, status = 200) { return c.json(data, status); }
+function errRes(c: any, msg: string, status = 500) { console.log('ERROR:', msg); return c.json({ error: msg }, status); }
+
+// ─── KV helpers ───
+async function getList(prefix: string): Promise<string[]> {
+  const val = await kv.get(`${prefix}:list`);
+  return val ? JSON.parse(val) : [];
+}
+async function addToList(prefix: string, id: string) {
+  const list = await getList(prefix);
+  if (!list.includes(id)) { list.push(id); await kv.set(`${prefix}:list`, JSON.stringify(list)); }
+}
+async function removeFromList(prefix: string, id: string) {
+  let list = await getList(prefix);
+  list = list.filter(i => i !== id);
+  await kv.set(`${prefix}:list`, JSON.stringify(list));
+}
+async function getAllKV<T>(prefix: string): Promise<T[]> {
+  const ids = await getList(prefix);
+  if (!ids.length) return [];
+  const items = await Promise.all(ids.map(id => kv.get(`${prefix}:data:${id}`)));
+  return items.filter(Boolean).map(i => JSON.parse(i!));
+}
+async function getOneKV<T>(prefix: string, id: string): Promise<T | null> {
+  const val = await kv.get(`${prefix}:data:${id}`);
+  return val ? JSON.parse(val) : null;
+}
+async function setOneKV(prefix: string, id: string, data: any) {
+  await kv.set(`${prefix}:data:${id}`, JSON.stringify(data));
+  await addToList(prefix, id);
+}
+async function delOneKV(prefix: string, id: string) {
+  await kv.del(`${prefix}:data:${id}`);
+  await removeFromList(prefix, id);
+}
+
+// ─── DB detection: checks ALL required tables exist ───
+let _useDB: boolean | null = null;
+async function useDB(): Promise<boolean> {
+  if (_useDB !== null) return _useDB;
+  try {
+    // Check that BOTH products and product_images exist (full schema required)
+    const [r1, r2] = await Promise.all([
+      db.from('products').select('id').limit(1),
+      db.from('product_images').select('id').limit(1),
+    ]);
+    _useDB = !r1.error && !r2.error;
+    console.log(_useDB ? '✅ DB mode: Supabase tables' : '⚠️ DB mode: KV fallback (run SQL migration first)');
+  } catch {
+    _useDB = false;
+    console.log('⚠️ DB check failed, using KV fallback');
+  }
+  return _useDB;
+}
+
+// ─── Storage setup ───
+async function setupStorage() {
+  try {
+    const { data: buckets } = await db.storage.listBuckets();
+    if (!buckets?.some((b: any) => b.name === MEDIA_BUCKET)) {
+      await db.storage.createBucket(MEDIA_BUCKET, { public: true, fileSizeLimit: 52428800 });
+    }
+  } catch (e) { console.log('Storage setup error:', e); }
+}
+
+// ─── Seed (KV) ───
+async function seedIfEmpty() {
+  const seeded = await kv.get("seed:done:v3");
+  if (seeded) return;
+  const cats = [
+    { id: "cat-1", name_fr: "Cartables", name_ar: "الكرطابلات", slug: "cartables", image: "https://images.unsplash.com/photo-1594608661623-aa0bd3a69d98?w=400&q=80", order: 1, is_active: true },
+    { id: "cat-2", name_fr: "Trousses", name_ar: "المقالم", slug: "trousses", image: "https://images.unsplash.com/photo-1725953236941-ec8efc71b0fc?w=400&q=80", order: 2, is_active: true },
+    { id: "cat-3", name_fr: "Packs Rentrée", name_ar: "عروض الدخول المدرسي", slug: "packs", image: "https://images.unsplash.com/photo-1682278658190-2e8013fd3388?w=400&q=80", order: 3, is_active: true },
+    { id: "cat-4", name_fr: "Accessoires", name_ar: "الإكسسوارات", slug: "accessoires", image: "https://images.unsplash.com/photo-1726726192146-5532a7618201?w=400&q=80", order: 4, is_active: true },
+  ];
+  for (const c of cats) await setOneKV("categories", c.id, c);
+  const now = new Date().toISOString();
+  const products = [
+    { id: "prod-1", name_fr: "Cartable Premium XL", name_ar: "كرطابل بريميوم XL", description_fr: "Cartable spacieux et résistant, parfait pour les lycéens.", description_ar: "كرطابل واسع ومتين، مثالي لطلاب الثانوية.", price: 3500, sale_price: null, images: ["https://images.unsplash.com/photo-1594608661623-aa0bd3a69d98?w=600&q=80"], video_url: "", category_id: "cat-1", stock: 45, is_featured: true, is_new: true, is_best_seller: false, is_promo: false, is_active: true, show_on_homepage: true, show_in_best_sellers: false, show_in_new_arrivals: true, show_in_promotions: false, show_in_cartables: true, show_in_trousses: false, show_in_school_supplies: false, sort_order: 1, created_at: now, updated_at: now },
+    { id: "prod-2", name_fr: "Cartable Sport Pro", name_ar: "كرطابل سبور برو", description_fr: "Design sportif et moderne pour les ados.", description_ar: "تصميم رياضي وعصري للمراهقين.", price: 2800, sale_price: 2400, images: ["https://images.unsplash.com/photo-1749243576114-013c37a8d116?w=600&q=80"], video_url: "", category_id: "cat-1", stock: 32, is_featured: false, is_new: false, is_best_seller: true, is_promo: true, is_active: true, show_on_homepage: true, show_in_best_sellers: true, show_in_new_arrivals: false, show_in_promotions: true, show_in_cartables: true, show_in_trousses: false, show_in_school_supplies: false, sort_order: 2, created_at: now, updated_at: now },
+    { id: "prod-3", name_fr: "Cartable Ergonomique Kids", name_ar: "كرطابل إرغونومي للأطفال", description_fr: "Spécialement conçu pour les enfants du primaire.", description_ar: "مصمم خصيصاً لأطفال المرحلة الابتدائية.", price: 3200, sale_price: null, images: ["https://images.unsplash.com/photo-1567159949062-b2ce8da75070?w=600&q=80"], video_url: "", category_id: "cat-1", stock: 28, is_featured: true, is_new: false, is_best_seller: true, is_promo: false, is_active: true, show_on_homepage: true, show_in_best_sellers: true, show_in_new_arrivals: false, show_in_promotions: false, show_in_cartables: true, show_in_trousses: false, show_in_school_supplies: false, sort_order: 3, created_at: now, updated_at: now },
+    { id: "prod-4", name_fr: "Trousse Double Compartiment", name_ar: "مقلمة ذات حجرتين", description_fr: "Trousse premium avec deux compartiments.", description_ar: "مقلمة بريميوم بحجرتين واسعتين.", price: 850, sale_price: null, images: ["https://images.unsplash.com/photo-1725953236941-ec8efc71b0fc?w=600&q=80"], video_url: "", category_id: "cat-2", stock: 80, is_featured: false, is_new: true, is_best_seller: false, is_promo: false, is_active: true, show_on_homepage: true, show_in_best_sellers: false, show_in_new_arrivals: true, show_in_promotions: false, show_in_cartables: false, show_in_trousses: true, show_in_school_supplies: false, sort_order: 4, created_at: now, updated_at: now },
+    { id: "prod-5", name_fr: "Pack Rentrée Complet Premium", name_ar: "عرض الدخول المدرسي الكامل بريميوم", description_fr: "Pack complet : 1 cartable + 1 trousse.", description_ar: "عرض كامل: كرطابل + مقلمة.", price: 4500, sale_price: 4100, images: ["https://images.unsplash.com/photo-1682278658190-2e8013fd3388?w=600&q=80"], video_url: "", category_id: "cat-3", stock: 20, is_featured: true, is_new: false, is_best_seller: true, is_promo: true, is_active: true, show_on_homepage: true, show_in_best_sellers: true, show_in_new_arrivals: false, show_in_promotions: true, show_in_cartables: true, show_in_trousses: true, show_in_school_supplies: false, sort_order: 5, created_at: now, updated_at: now },
+  ];
+  for (const p of products) await setOneKV("products", p.id, p);
+  const banners = [
+    { id: "ban-1", title_fr: "Nouvelle Collection Rentrée 2024", title_ar: "مجموعة الدخول المدرسي الجديدة 2024", subtitle_fr: "Découvrez +60 modèles de cartables et trousses haut de gamme", subtitle_ar: "اكتشف أكثر من 60 موديل من الكرطابلات والمقالم الراقية", cta_fr: "Découvrir la collection", cta_ar: "اكتشف المجموعة", image: "https://images.unsplash.com/photo-1594608661623-aa0bd3a69d98?w=1920&q=80", link: "/shop", is_active: true, order: 1 },
+    { id: "ban-2", title_fr: "Packs Rentrée Exclusifs", title_ar: "عروض الدخول المدرسي الحصرية", subtitle_fr: "Cartable + Trousse à prix spécial — Offre limitée !", subtitle_ar: "كرطابل + مقلمة بسعر مميز — عرض محدود!", cta_fr: "Voir les packs", cta_ar: "شاهد العروض", image: "https://images.unsplash.com/photo-1682278658190-2e8013fd3388?w=1920&q=80", link: "/shop?category=packs", is_active: true, order: 2 },
+  ];
+  for (const b of banners) await setOneKV("banners", b.id, b);
+  const theme: ThemeSettings = { primary_color: "#1A3C6E", accent_color: "#F57C00", bg_color: "#F8FAFC", font_heading: "Montserrat", font_body: "Inter", button_radius: "xl", show_featured: true, show_new_arrivals: true, show_best_sellers: true, show_wholesale_section: true, show_testimonials: true, logo_text: "VERKING SCOLAIRE", logo_subtitle: "STP STATIONERY" };
+  await kv.set("theme:settings", JSON.stringify(theme));
+  await kv.set("homepage:config", JSON.stringify({ hero: { enabled: true, title_fr: "Nouvelle Collection Rentrée 2024", title_ar: "مجموعة الدخول المدرسي الجديدة 2024", subtitle_fr: "Découvrez +60 modèles", subtitle_ar: "اكتشف أكثر من 60 موديل", cta_fr: "Découvrir", cta_ar: "اكتشف", image: "" }, categories: { enabled: true, title_fr: "Nos Catégories", title_ar: "فئاتنا" }, featured: { enabled: true, title_fr: "Produits Vedettes", title_ar: "منتجات مختارة", limit: 8 }, new_arrivals: { enabled: true, title_fr: "Nouveautés", title_ar: "وصل حديثاً", limit: 8 }, best_sellers: { enabled: true, title_fr: "Meilleures Ventes", title_ar: "الأكثر مبيعاً", limit: 8 }, promotions: { enabled: true, title_fr: "Promotions", title_ar: "عروض خاصة" }, trust: { enabled: true }, testimonials: { enabled: true }, wholesale: { enabled: true }, sections_order: ["hero","categories","featured","new_arrivals","best_sellers","promotions","trust","testimonials","wholesale"] }));
+  await kv.set("content:data", JSON.stringify({ about_fr: "VERKING SCOLAIRE est une marque algérienne spécialisée dans les articles scolaires haut de gamme.", about_ar: "VERKING SCOLAIRE علامة جزائرية متخصصة في الأدوات المدرسية عالية الجودة.", address: "Rue des Frères Belloul, Bordj El Bahri, Alger 16111, Algérie", phone: "+213 555 123 456", email: "contact@verking-scolaire.dz", working_hours: "Dim–Jeu: 08h00–18h00 | Ven–Sam: 09h00–14h00", facebook: "https://facebook.com/verking.scolaire", instagram: "https://instagram.com/verking.scolaire", whatsapp: "+213555123456", map_embed: "https://maps.google.com/maps?q=Bordj+El+Bahri+Alger&output=embed", faq: [{ q_fr: "Quels sont les délais de livraison ?", q_ar: "ما هي مدة التوصيل؟", a_fr: "La livraison prend 2 à 5 jours ouvrables.", a_ar: "يستغرق التوصيل من 2 إلى 5 أيام عمل." }] }));
+  await kv.set("admin:config", JSON.stringify({ password: "Admin@Verking2024", token: "vk-admin-secure-token-2024" }));
+  await kv.set("seed:done:v3", "1");
+  console.log("✅ Seed v3 done");
+}
+
+setupStorage().catch(console.error);
+seedIfEmpty().catch(console.error);
+
+// ─── Admin auth ───
+async function isAdmin(c: any): Promise<boolean> {
+  const token = c.req.header("X-Admin-Token");
+  if (!token) return false;
+  try {
+    // New DB-based session
+    if (await useDB()) {
+      try {
+        const parts = token.split(':');
+        if (parts.length >= 3 && parts[0] === 'vk_session') {
+          const { data } = await db.from('admin_users').select('id, is_active').eq('id', parts[1]).single();
+          if (data?.is_active) return true;
+        }
+      } catch { /* fall through */ }
+    }
+    // KV / legacy token
+    const configStr = await kv.get("admin:config");
+    const config = configStr ? JSON.parse(configStr) : { token: "vk-admin-secure-token-2024" };
+    return token === config.token;
+  } catch {
+    return token === "vk-admin-secure-token-2024";
+  }
+}
+
+// ─────────────── AUTH ROUTES ───────────────
+app.post("/make-server-ea36795c/admin/login", async (c) => {
+  try {
+    const { email, password } = await c.req.json();
+
+    // Try DB login
+    if (await useDB()) {
+      try {
+        const targetEmail = email || null;
+        if (targetEmail) {
+          const { data: match } = await db.rpc('verify_admin_password', { admin_email: targetEmail, admin_password: password }).single();
+          if (match?.valid) {
+            const { data: admin } = await db.from('admin_users').select('*').eq('email', targetEmail).single();
+            if (admin) {
+              const tok = `vk_session:${admin.id}:${uid()}`;
+              await db.from('admin_users').update({ last_login: new Date().toISOString() }).eq('id', admin.id);
+              return respond(c, { success: true, token: tok, admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role } });
+            }
+          }
+        }
+        // password-only: check all active admins
+        if (!targetEmail && password) {
+          const { data: admins } = await db.from('admin_users').select('*').eq('is_active', true);
+          for (const admin of (admins || [])) {
+            const { data: match } = await db.rpc('verify_admin_password', { admin_email: admin.email, admin_password: password }).single();
+            if (match?.valid) {
+              const tok = `vk_session:${admin.id}:${uid()}`;
+              await db.from('admin_users').update({ last_login: new Date().toISOString() }).eq('id', admin.id);
+              return respond(c, { success: true, token: tok, admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role } });
+            }
+          }
+        }
+      } catch (e) { console.log('DB login failed, trying KV:', e); }
+    }
+
+    // KV fallback
+    const pwd = password || '';
+    const configStr = await kv.get("admin:config");
+    const config = configStr ? JSON.parse(configStr) : { password: "Admin@Verking2024", token: "vk-admin-secure-token-2024" };
+    if (pwd === config.password) return respond(c, { success: true, token: config.token });
+    return errRes(c, "Mot de passe incorrect", 401);
+  } catch (e) { return errRes(c, `Login error: ${e}`); }
+});
+
+app.get("/make-server-ea36795c/admin/verify", async (c) => {
+  if (await isAdmin(c)) return respond(c, { success: true });
+  return errRes(c, "Unauthorized", 401);
+});
+
+app.get("/make-server-ea36795c/health", async (c) => {
+  const mode = await useDB();
+  return respond(c, { status: "ok", app: "VERKING SCOLAIRE API v4", mode: mode ? "supabase_tables" : "kv_fallback" });
+});
+
+// ═══════════════ PRODUCTS ═══════════════
+app.get("/make-server-ea36795c/products", async (c) => {
+  try {
+    const q = c.req.query();
+    const { category, featured, new: isNew, best_seller, promo, search, active, homepage, new_arrivals, best_sellers, cartables, trousses, school_supplies } = q;
+
+    // ── Try DB ──
+    if (await useDB()) {
+      try {
+        // Select products without join first — safer
+        let query = db.from('products').select('*');
+        if (active === "true") query = query.eq('is_active', true);
+        if (category) query = query.eq('category_id', category);
+        if (featured === "true") query = query.eq('is_featured', true);
+        if (isNew === "true") query = query.eq('is_new', true);
+        if (best_seller === "true") query = query.eq('is_best_seller', true);
+        if (promo === "true") query = query.eq('is_promo', true);
+        if (homepage === "true") query = query.eq('show_on_homepage', true);
+        if (new_arrivals === "true") query = query.eq('show_in_new_arrivals', true);
+        if (best_sellers === "true") query = query.eq('show_in_best_sellers', true);
+        if (cartables === "true") query = query.eq('show_in_cartables', true);
+        if (trousses === "true") query = query.eq('show_in_trousses', true);
+        if (school_supplies === "true") query = query.eq('show_in_school_supplies', true);
+        if (search) query = query.or(`name_fr.ilike.%${search}%,name_ar.ilike.%${search}%`);
+        query = query.order('sort_order', { ascending: true }).order('created_at', { ascending: false });
+        const { data, error } = await query;
+        if (error) throw new Error(`DB products query: ${error.message}`);
+
+        // Fetch images separately to avoid join failures
+        const productIds = (data || []).map((p: any) => p.id);
+        let imagesByProduct: Record<string, string[]> = {};
+        if (productIds.length > 0) {
+          try {
+            const { data: imgs } = await db.from('product_images').select('product_id, url, sort_order').in('product_id', productIds).order('sort_order', { ascending: true });
+            for (const img of (imgs || [])) {
+              if (!imagesByProduct[img.product_id]) imagesByProduct[img.product_id] = [];
+              imagesByProduct[img.product_id].push(img.url);
+            }
+          } catch { /* product_images might not exist yet */ }
+        }
+
+        const products = (data || []).map((p: any) => ({ ...p, images: imagesByProduct[p.id] || [] }));
+        return respond(c, { products, total: products.length });
+      } catch (e) {
+        console.log('DB products query failed, using KV:', e);
+      }
+    }
+
+    // ── KV fallback ──
+    let products = await getAllKV<Product>("products");
+    if (active === "true") products = products.filter(p => p.is_active);
+    if (category) products = products.filter(p => p.category_id === category);
+    if (featured === "true") products = products.filter(p => p.is_featured);
+    if (isNew === "true") products = products.filter(p => p.is_new);
+    if (best_seller === "true") products = products.filter(p => p.is_best_seller);
+    if (promo === "true") products = products.filter(p => p.is_promo || !!p.sale_price);
+    if (homepage === "true") products = products.filter(p => p.show_on_homepage);
+    if (new_arrivals === "true") products = products.filter(p => p.show_in_new_arrivals);
+    if (best_sellers === "true") products = products.filter(p => p.show_in_best_sellers);
+    if (cartables === "true") products = products.filter(p => p.show_in_cartables);
+    if (trousses === "true") products = products.filter(p => p.show_in_trousses);
+    if (school_supplies === "true") products = products.filter(p => p.show_in_school_supplies);
+    if (search) { const s = search.toLowerCase(); products = products.filter(p => p.name_fr.toLowerCase().includes(s) || p.name_ar.includes(s)); }
+    products.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return respond(c, { products, total: products.length });
+  } catch (e) { return errRes(c, `Products list error: ${e}`); }
+});
+
+app.get("/make-server-ea36795c/products/:id", async (c) => {
+  try {
+    const id = c.req.param("id");
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('products').select('*').eq('id', id).single();
+        if (!error && data) {
+          let images: string[] = [];
+          try {
+            const { data: imgs } = await db.from('product_images').select('url, sort_order').eq('product_id', id).order('sort_order', { ascending: true });
+            images = (imgs || []).map((img: any) => img.url);
+          } catch { /* ignore */ }
+          return respond(c, { product: { ...data, images } });
+        }
+      } catch (e) { console.log('DB get product failed, using KV:', e); }
+    }
+    const product = await getOneKV<Product>("products", id);
+    if (!product) return errRes(c, "Product not found", 404);
+    return respond(c, { product });
+  } catch (e) { return errRes(c, `Get product error: ${e}`); }
+});
+
+app.post("/make-server-ea36795c/products", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const body = await c.req.json();
+    const now = new Date().toISOString();
+
+    if (await useDB()) {
+      try {
+        const images: string[] = body.images || [];
+        const { data, error } = await db.from('products').insert({
+          name_fr: body.name_fr || '', name_ar: body.name_ar || '',
+          description_fr: body.description_fr || '', description_ar: body.description_ar || '',
+          price: Number(body.price) || 0, sale_price: body.sale_price ? Number(body.sale_price) : null,
+          category_id: body.category_id || null, stock: Number(body.stock) || 0,
+          is_featured: Boolean(body.is_featured), is_new: Boolean(body.is_new),
+          is_best_seller: Boolean(body.is_best_seller), is_promo: Boolean(body.is_promo),
+          is_active: body.is_active !== false,
+          show_on_homepage: Boolean(body.show_on_homepage), show_in_featured: Boolean(body.show_in_featured),
+          show_in_best_sellers: Boolean(body.show_in_best_sellers), show_in_new_arrivals: Boolean(body.show_in_new_arrivals),
+          show_in_promotions: Boolean(body.show_in_promotions), show_in_cartables: Boolean(body.show_in_cartables),
+          show_in_trousses: Boolean(body.show_in_trousses), show_in_school_supplies: Boolean(body.show_in_school_supplies),
+          section_priority: Number(body.section_priority) || 99, sort_order: Number(body.sort_order) || 99,
+        }).select().single();
+        if (error) throw new Error(error.message);
+        if (images.length > 0 && data) {
+          try { await db.from('product_images').insert(images.map((url, i) => ({ product_id: data.id, url, sort_order: i, is_primary: i === 0 }))); } catch { /* ignore */ }
+        }
+        return respond(c, { product: { ...data, images } }, 201);
+      } catch (e) { console.log('DB create product failed, using KV:', e); }
+    }
+
+    const id = "prod-" + uid();
+    const product: Product = { id, name_fr: body.name_fr || "", name_ar: body.name_ar || "", description_fr: body.description_fr || "", description_ar: body.description_ar || "", price: Number(body.price) || 0, sale_price: body.sale_price ? Number(body.sale_price) : undefined, images: body.images || [], video_url: body.video_url || "", category_id: body.category_id || "", stock: Number(body.stock) || 0, is_featured: Boolean(body.is_featured), is_new: Boolean(body.is_new), is_best_seller: Boolean(body.is_best_seller), is_promo: Boolean(body.is_promo), is_active: body.is_active !== false, show_on_homepage: Boolean(body.show_on_homepage), show_in_best_sellers: Boolean(body.show_in_best_sellers), show_in_new_arrivals: Boolean(body.show_in_new_arrivals), show_in_promotions: Boolean(body.show_in_promotions), show_in_cartables: Boolean(body.show_in_cartables), show_in_trousses: Boolean(body.show_in_trousses), show_in_school_supplies: Boolean(body.show_in_school_supplies), sort_order: Number(body.sort_order) || 99, created_at: now, updated_at: now };
+    await setOneKV("products", id, product);
+    return respond(c, { product }, 201);
+  } catch (e) { return errRes(c, `Create product error: ${e}`); }
+});
+
+app.put("/make-server-ea36795c/products/:id", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const id = c.req.param("id");
+    const body = await c.req.json();
+
+    if (await useDB()) {
+      try {
+        const images: string[] | undefined = body.images;
+        const cleanBody: any = { ...body };
+        delete cleanBody.images; delete cleanBody.id; delete cleanBody.product_images;
+        if (cleanBody.order !== undefined) { cleanBody.sort_order = cleanBody.order; delete cleanBody.order; }
+        const { data, error } = await db.from('products').update(cleanBody).eq('id', id).select().single();
+        if (error) throw new Error(error.message);
+        if (images !== undefined) {
+          try {
+            await db.from('product_images').delete().eq('product_id', id);
+            if (images.length > 0) await db.from('product_images').insert(images.map((url, i) => ({ product_id: id, url, sort_order: i, is_primary: i === 0 })));
+          } catch { /* ignore */ }
+        }
+        return respond(c, { product: { ...data, images: images || [] } });
+      } catch (e) { console.log('DB update product failed, using KV:', e); }
+    }
+
+    const existing = await getOneKV<Product>("products", id);
+    if (!existing) return errRes(c, "Not found", 404);
+    const updated = { ...existing, ...body, id, updated_at: new Date().toISOString() };
+    await setOneKV("products", id, updated);
+    return respond(c, { product: updated });
+  } catch (e) { return errRes(c, `Update product error: ${e}`); }
+});
+
+app.delete("/make-server-ea36795c/products/:id", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const id = c.req.param("id");
+    if (await useDB()) {
+      try { const { error } = await db.from('products').delete().eq('id', id); if (!error) return respond(c, { success: true }); } catch { /* fallthrough */ }
+    }
+    await delOneKV("products", id);
+    return respond(c, { success: true });
+  } catch (e) { return errRes(c, `Delete product error: ${e}`); }
+});
+
+// ═══════════════ CATEGORIES ═══════════════
+app.get("/make-server-ea36795c/categories", async (c) => {
+  try {
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('categories').select('*').order('sort_order', { ascending: true });
+        if (!error) return respond(c, { categories: (data || []).map(cat => ({ ...cat, order: cat.sort_order })) });
+      } catch (e) { console.log('DB categories failed, using KV:', e); }
+    }
+    const categories = await getAllKV<Category>("categories");
+    return respond(c, { categories: categories.sort((a, b) => (a.order || 0) - (b.order || 0)) });
+  } catch (e) { return errRes(c, `Categories error: ${e}`); }
+});
+
+app.post("/make-server-ea36795c/categories", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const body = await c.req.json();
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('categories').insert({ name_fr: body.name_fr || '', name_ar: body.name_ar || '', slug: body.slug || `cat-${uid()}`, image: body.image || '', sort_order: Number(body.order || body.sort_order) || 99, is_active: body.is_active !== false }).select().single();
+        if (!error && data) return respond(c, { category: { ...data, order: data.sort_order } }, 201);
+      } catch (e) { console.log('DB create category failed:', e); }
+    }
+    const id = "cat-" + uid();
+    const category: Category = { id, name_fr: body.name_fr || "", name_ar: body.name_ar || "", slug: body.slug || id, image: body.image || "", order: Number(body.order) || 99, is_active: body.is_active !== false };
+    await setOneKV("categories", id, category);
+    return respond(c, { category }, 201);
+  } catch (e) { return errRes(c, `Create category error: ${e}`); }
+});
+
+app.put("/make-server-ea36795c/categories/:id", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const id = c.req.param("id");
+    const body = await c.req.json();
+    if (await useDB()) {
+      try {
+        const updates: any = { ...body }; delete updates.id;
+        if (updates.order !== undefined) { updates.sort_order = updates.order; delete updates.order; }
+        const { error } = await db.from('categories').update(updates).eq('id', id);
+        if (!error) return respond(c, { success: true });
+      } catch (e) { console.log('DB update category failed:', e); }
+    }
+    const existing = await getOneKV<Category>("categories", id);
+    if (!existing) return errRes(c, "Not found", 404);
+    await setOneKV("categories", id, { ...existing, ...body, id });
+    return respond(c, { success: true });
+  } catch (e) { return errRes(c, `Update category error: ${e}`); }
+});
+
+app.delete("/make-server-ea36795c/categories/:id", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const id = c.req.param("id");
+    if (await useDB()) { try { await db.from('categories').delete().eq('id', id); return respond(c, { success: true }); } catch { /* fallthrough */ } }
+    await delOneKV("categories", id);
+    return respond(c, { success: true });
+  } catch (e) { return errRes(c, `Delete category error: ${e}`); }
+});
+
+// ═══════════════ BANNERS ═══════════════
+app.get("/make-server-ea36795c/banners", async (c) => {
+  try {
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('banners').select('*').eq('is_active', true).order('sort_order', { ascending: true });
+        if (!error) return respond(c, { banners: (data || []).map(b => ({ ...b, order: b.sort_order })) });
+      } catch (e) { console.log('DB banners failed, using KV:', e); }
+    }
+    const banners = await getAllKV<Banner>("banners");
+    return respond(c, { banners: banners.filter(b => b.is_active).sort((a, b) => (a.order || 0) - (b.order || 0)) });
+  } catch (e) { return errRes(c, `Banners error: ${e}`); }
+});
+
+app.get("/make-server-ea36795c/banners/all", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('banners').select('*').order('sort_order', { ascending: true });
+        if (!error) return respond(c, { banners: (data || []).map(b => ({ ...b, order: b.sort_order })) });
+      } catch (e) { console.log('DB banners/all failed, using KV:', e); }
+    }
+    const banners = await getAllKV<Banner>("banners");
+    return respond(c, { banners: banners.sort((a, b) => (a.order || 0) - (b.order || 0)) });
+  } catch (e) { return errRes(c, `Banners all error: ${e}`); }
+});
+
+app.post("/make-server-ea36795c/banners", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const body = await c.req.json();
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('banners').insert({ title_fr: body.title_fr || '', title_ar: body.title_ar || '', subtitle_fr: body.subtitle_fr || '', subtitle_ar: body.subtitle_ar || '', cta_fr: body.cta_fr || 'Voir plus', cta_ar: body.cta_ar || '', image: body.image || '', link: body.link || '/shop', is_active: body.is_active !== false, sort_order: Number(body.order || body.sort_order) || 99 }).select().single();
+        if (!error && data) return respond(c, { banner: { ...data, order: data.sort_order } }, 201);
+      } catch (e) { console.log('DB create banner failed:', e); }
+    }
+    const id = "ban-" + uid();
+    const banner: Banner = { id, title_fr: body.title_fr || "", title_ar: body.title_ar || "", subtitle_fr: body.subtitle_fr || "", subtitle_ar: body.subtitle_ar || "", cta_fr: body.cta_fr || "Voir plus", cta_ar: body.cta_ar || "شاهد المزيد", image: body.image || "", link: body.link || "/shop", is_active: body.is_active !== false, order: Number(body.order) || 99 };
+    await setOneKV("banners", id, banner);
+    return respond(c, { banner }, 201);
+  } catch (e) { return errRes(c, `Create banner error: ${e}`); }
+});
+
+app.put("/make-server-ea36795c/banners/:id", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const id = c.req.param("id");
+    const body = await c.req.json();
+    if (await useDB()) {
+      try {
+        const updates = { ...body }; delete updates.id;
+        if (updates.order !== undefined) { updates.sort_order = updates.order; delete updates.order; }
+        const { error } = await db.from('banners').update(updates).eq('id', id);
+        if (!error) return respond(c, { success: true });
+      } catch (e) { console.log('DB update banner failed:', e); }
+    }
+    const existing = await getOneKV<Banner>("banners", id);
+    if (!existing) return errRes(c, "Not found", 404);
+    await setOneKV("banners", id, { ...existing, ...body, id });
+    return respond(c, { success: true });
+  } catch (e) { return errRes(c, `Update banner error: ${e}`); }
+});
+
+app.delete("/make-server-ea36795c/banners/:id", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const id = c.req.param("id");
+    if (await useDB()) { try { await db.from('banners').delete().eq('id', id); return respond(c, { success: true }); } catch { /* fallthrough */ } }
+    await delOneKV("banners", id);
+    return respond(c, { success: true });
+  } catch (e) { return errRes(c, `Delete banner error: ${e}`); }
+});
+
+// ═══════════════ ORDERS ═══════════════
+app.get("/make-server-ea36795c/orders", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('orders').select('*').order('created_at', { ascending: false });
+        if (!error) {
+          // Fetch items separately
+          const orderIds = (data || []).map((o: any) => o.id);
+          let itemsByOrder: Record<string, any[]> = {};
+          if (orderIds.length > 0) {
+            try {
+              const { data: items } = await db.from('order_items').select('*').in('order_id', orderIds);
+              for (const item of (items || [])) {
+                if (!itemsByOrder[item.order_id]) itemsByOrder[item.order_id] = [];
+                itemsByOrder[item.order_id].push(item);
+              }
+            } catch { /* ignore */ }
+          }
+          const orders = (data || []).map((o: any) => ({ ...o, items: itemsByOrder[o.id] || [] }));
+          return respond(c, { orders, total: orders.length });
+        }
+      } catch (e) { console.log('DB orders failed, using KV:', e); }
+    }
+    const orders = await getAllKV<Order>("orders");
+    orders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return respond(c, { orders, total: orders.length });
+  } catch (e) { return errRes(c, `Orders list error: ${e}`); }
+});
+
+app.get("/make-server-ea36795c/orders/:id", async (c) => {
+  try {
+    const id = c.req.param("id");
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('orders').select('*').eq('id', id).single();
+        if (!error && data) {
+          let items: any[] = [];
+          try { const { data: it } = await db.from('order_items').select('*').eq('order_id', id); items = it || []; } catch { /* ignore */ }
+          return respond(c, { order: { ...data, items } });
+        }
+      } catch (e) { console.log('DB get order failed:', e); }
+    }
+    const order = await getOneKV<Order>("orders", id);
+    if (!order) return errRes(c, "Order not found", 404);
+    return respond(c, { order });
+  } catch (e) { return errRes(c, `Get order error: ${e}`); }
+});
+
+app.post("/make-server-ea36795c/orders", async (c) => {
+  try {
+    const body = await c.req.json();
+    const orderNum = "VK-" + Date.now().toString().slice(-8);
+    const now = new Date().toISOString();
+
+    if (await useDB()) {
+      try {
+        let customerId = null;
+        if (body.customer_phone) {
+          const phone = String(body.customer_phone).replace(/\s/g, '');
+          const { data: existing } = await db.from('customers').select('id, total_spent, total_orders').eq('phone', phone).single();
+          if (existing) {
+            customerId = existing.id;
+            await db.from('customers').update({ total_spent: (existing.total_spent || 0) + Number(body.total || 0), total_orders: (existing.total_orders || 0) + 1 }).eq('id', existing.id);
+          } else {
+            const { data: newC } = await db.from('customers').insert({ name: body.customer_name || '', phone, email: body.customer_email || '', wilaya: body.customer_wilaya || '', total_spent: Number(body.total || 0), total_orders: 1 }).select('id').single();
+            if (newC) customerId = newC.id;
+          }
+        }
+        const { data: order, error } = await db.from('orders').insert({ order_number: orderNum, customer_id: customerId, customer_name: body.customer_name || '', customer_phone: body.customer_phone || '', customer_email: body.customer_email || '', customer_address: body.customer_address || '', customer_wilaya: body.customer_wilaya || '', subtotal: Number(body.subtotal) || 0, shipping: Number(body.shipping) || 0, total: Number(body.total) || 0, payment_method: body.payment_method || 'cash_on_delivery', delivery_type: body.delivery_type || 'delivery', status: 'new', notes: body.notes || '' }).select().single();
+        if (error) throw new Error(error.message);
+        const items = body.items || [];
+        if (items.length > 0 && order) {
+          try {
+            await db.from('order_items').insert(items.map((item: any) => ({ order_id: order.id, product_id: item.product_id || null, product_name_fr: item.name_fr || item.name || '', product_name_ar: item.name_ar || '', product_image: item.image || (item.images?.[0]) || '', unit_price: Number(item.price) || 0, quantity: Number(item.qty || item.quantity) || 1, total: (Number(item.price) || 0) * (Number(item.qty || item.quantity) || 1) })));
+          } catch { /* ignore */ }
+          for (const item of items) {
+            if (item.product_id) {
+              try { const { data: prod } = await db.from('products').select('stock').eq('id', item.product_id).single(); if (prod) await db.from('products').update({ stock: Math.max(0, prod.stock - (item.qty || item.quantity || 1)) }).eq('id', item.product_id); } catch { /* ignore */ }
+            }
+          }
+        }
+        return respond(c, { order: { ...order, items } }, 201);
+      } catch (e) { console.log('DB create order failed, using KV:', e); }
+    }
+
+    const id = "ord-" + uid();
+    const order: Order = { id, order_number: orderNum, customer_name: body.customer_name || "", customer_phone: body.customer_phone || "", customer_email: body.customer_email || "", customer_address: body.customer_address || "", customer_wilaya: body.customer_wilaya || "", items: body.items || [], subtotal: Number(body.subtotal) || 0, shipping: Number(body.shipping) || 0, total: Number(body.total) || 0, payment_method: body.payment_method || "cash_on_delivery", delivery_type: body.delivery_type || "delivery", status: "new", notes: body.notes || "", created_at: now, updated_at: now };
+    await setOneKV("orders", id, order);
+    const custId = "cust-" + String(body.customer_phone || '').replace(/\D/g, "");
+    const existingCust = await getOneKV<any>("customers", custId);
+    await setOneKV("customers", custId, existingCust ? { ...existingCust, orders: [...(existingCust.orders || []), id], total_spent: (existingCust.total_spent || 0) + order.total, updated_at: now } : { id: custId, name: body.customer_name, phone: body.customer_phone, email: body.customer_email || "", wilaya: body.customer_wilaya || "", orders: [id], total_spent: order.total, type: "retail", created_at: now, updated_at: now });
+    for (const item of (body.items || [])) {
+      const prod = await getOneKV<Product>("products", item.product_id);
+      if (prod) await setOneKV("products", prod.id, { ...prod, stock: Math.max(0, prod.stock - (item.qty || 1)) });
+    }
+    return respond(c, { order }, 201);
+  } catch (e) { return errRes(c, `Create order error: ${e}`); }
+});
+
+app.put("/make-server-ea36795c/orders/:id", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const id = c.req.param("id");
+    const body = await c.req.json();
+    if (await useDB()) {
+      try {
+        const updates = { ...body }; delete updates.id; delete updates.items; delete updates.order_items;
+        const { data, error } = await db.from('orders').update(updates).eq('id', id).select().single();
+        if (!error) return respond(c, { order: data });
+      } catch (e) { console.log('DB update order failed:', e); }
+    }
+    const existing = await getOneKV<Order>("orders", id);
+    if (!existing) return errRes(c, "Not found", 404);
+    const updated = { ...existing, ...body, id, updated_at: new Date().toISOString() };
+    await setOneKV("orders", id, updated);
+    return respond(c, { order: updated });
+  } catch (e) { return errRes(c, `Update order error: ${e}`); }
+});
+
+// ═══════════════ CUSTOMERS ═══════════════
+app.get("/make-server-ea36795c/customers", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('customers').select('*').order('created_at', { ascending: false });
+        if (!error) return respond(c, { customers: data || [], total: (data || []).length });
+      } catch (e) { console.log('DB customers failed, using KV:', e); }
+    }
+    const customers = await getAllKV<any>("customers");
+    customers.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return respond(c, { customers, total: customers.length });
+  } catch (e) { return errRes(c, `Customers list error: ${e}`); }
+});
+
+// ═══════════════ WHOLESALE ═══════════════
+app.get("/make-server-ea36795c/wholesale", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('wholesale_requests').select('*').order('created_at', { ascending: false });
+        if (!error) return respond(c, { requests: data || [], total: (data || []).length });
+      } catch (e) { console.log('DB wholesale failed, using KV:', e); }
+    }
+    const requests = await getAllKV<WholesaleRequest>("wholesale");
+    requests.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return respond(c, { requests, total: requests.length });
+  } catch (e) { return errRes(c, `Wholesale list error: ${e}`); }
+});
+
+app.post("/make-server-ea36795c/wholesale", async (c) => {
+  try {
+    const body = await c.req.json();
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('wholesale_requests').insert({ company_name: body.company_name || '', contact_name: body.contact_name || '', phone: body.phone || '', email: body.email || '', wilaya: body.wilaya || '', message: body.message || '', status: 'pending' }).select().single();
+        if (!error && data) return respond(c, { request: data }, 201);
+      } catch (e) { console.log('DB create wholesale failed:', e); }
+    }
+    const id = "ws-" + uid();
+    const request: WholesaleRequest = { id, company_name: body.company_name || "", contact_name: body.contact_name || "", phone: body.phone || "", email: body.email || "", wilaya: body.wilaya || "", message: body.message || "", status: "pending", created_at: new Date().toISOString() };
+    await setOneKV("wholesale", id, request);
+    return respond(c, { request }, 201);
+  } catch (e) { return errRes(c, `Create wholesale error: ${e}`); }
+});
+
+app.put("/make-server-ea36795c/wholesale/:id", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const id = c.req.param("id");
+    const body = await c.req.json();
+    if (await useDB()) {
+      try {
+        const updates = { ...body }; delete updates.id;
+        const { error } = await db.from('wholesale_requests').update(updates).eq('id', id);
+        if (!error) return respond(c, { success: true });
+      } catch (e) { console.log('DB update wholesale failed:', e); }
+    }
+    const existing = await getOneKV<WholesaleRequest>("wholesale", id);
+    if (!existing) return errRes(c, "Not found", 404);
+    await setOneKV("wholesale", id, { ...existing, ...body, id });
+    return respond(c, { success: true });
+  } catch (e) { return errRes(c, `Update wholesale error: ${e}`); }
+});
+
+// ═══════════════ THEME ═══════════════
+const DEFAULT_THEME: ThemeSettings = { primary_color: "#1A3C6E", accent_color: "#F57C00", bg_color: "#F8FAFC", font_heading: "Montserrat", font_body: "Inter", button_radius: "xl", show_featured: true, show_new_arrivals: true, show_best_sellers: true, show_wholesale_section: true, show_testimonials: true, logo_text: "VERKING SCOLAIRE", logo_subtitle: "STP STATIONERY" };
+
+app.get("/make-server-ea36795c/theme", async (c) => {
+  try {
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('theme_settings').select('*').eq('id', 1).single();
+        if (!error && data) { const { id: _, ...theme } = data; return respond(c, { theme }); }
+      } catch (e) { console.log('DB theme failed, using KV:', e); }
+    }
+    const val = await kv.get("theme:settings");
+    return respond(c, { theme: val ? { ...DEFAULT_THEME, ...JSON.parse(val) } : DEFAULT_THEME });
+  } catch (e) { return errRes(c, `Get theme error: ${e}`); }
+});
+
+app.put("/make-server-ea36795c/theme", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const body = await c.req.json();
+    if (await useDB()) {
+      try {
+        const updates = { ...body }; delete updates.id;
+        const { error } = await db.from('theme_settings').update(updates).eq('id', 1);
+        if (!error) return respond(c, { success: true });
+      } catch (e) { console.log('DB update theme failed:', e); }
+    }
+    const current = await kv.get("theme:settings");
+    await kv.set("theme:settings", JSON.stringify({ ...(current ? JSON.parse(current) : DEFAULT_THEME), ...body }));
+    return respond(c, { success: true });
+  } catch (e) { return errRes(c, `Update theme error: ${e}`); }
+});
+
+// ═══════════════ HOMEPAGE CONFIG ═══════════════
+const DEFAULT_HP = { hero: { enabled: true, title_fr: "Nouvelle Collection Rentrée 2024", title_ar: "مجموعة الدخول المدرسي الجديدة 2024", subtitle_fr: "Découvrez +60 modèles de cartables", subtitle_ar: "اكتشف أكثر من 60 موديل", cta_fr: "Découvrir", cta_ar: "اكتشف", image: "" }, categories: { enabled: true, title_fr: "Nos Catégories", title_ar: "فئاتنا" }, featured: { enabled: true, title_fr: "Produits Vedettes", title_ar: "منتجات مختارة", limit: 8 }, new_arrivals: { enabled: true, title_fr: "Nouveautés", title_ar: "وصل حديثاً", limit: 8 }, best_sellers: { enabled: true, title_fr: "Meilleures Ventes", title_ar: "الأكثر مبيعاً", limit: 8 }, promotions: { enabled: true, title_fr: "Promotions", title_ar: "عروض خاصة" }, trust: { enabled: true }, testimonials: { enabled: true }, wholesale: { enabled: true }, sections_order: ["hero","categories","featured","new_arrivals","best_sellers","promotions","trust","testimonials","wholesale"] };
+
+app.get("/make-server-ea36795c/homepage-config", async (c) => {
+  try {
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('homepage_sections').select('*').order('sort_order', { ascending: true });
+        if (!error && data && data.length > 0) {
+          const config: any = { sections_order: [] };
+          for (const section of data) {
+            config[section.section_key] = { enabled: section.is_enabled, title_fr: section.title_fr || '', title_ar: section.title_ar || '', ...(section.config || {}) };
+            config.sections_order.push(section.section_key);
+          }
+          return respond(c, { config });
+        }
+      } catch (e) { console.log('DB homepage config failed, using KV:', e); }
+    }
+    const val = await kv.get("homepage:config");
+    return respond(c, { config: val ? { ...DEFAULT_HP, ...JSON.parse(val) } : DEFAULT_HP });
+  } catch (e) { return errRes(c, `Homepage config error: ${e}`); }
+});
+
+app.put("/make-server-ea36795c/homepage-config", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const body = await c.req.json();
+    if (await useDB()) {
+      try {
+        for (const [key, value] of Object.entries(body)) {
+          if (key === 'sections_order' || typeof value !== 'object' || value === null) continue;
+          const section = value as any;
+          const updates: any = {};
+          if (section.enabled !== undefined) updates.is_enabled = section.enabled;
+          if (section.title_fr !== undefined) updates.title_fr = section.title_fr;
+          if (section.title_ar !== undefined) updates.title_ar = section.title_ar;
+          const { enabled, title_fr, title_ar, ...extra } = section;
+          if (Object.keys(extra).length > 0) updates.config = extra;
+          await db.from('homepage_sections').update(updates).eq('section_key', key);
+        }
+        if (Array.isArray(body.sections_order)) {
+          for (let i = 0; i < body.sections_order.length; i++) await db.from('homepage_sections').update({ sort_order: i + 1 }).eq('section_key', body.sections_order[i]);
+        }
+        return respond(c, { success: true });
+      } catch (e) { console.log('DB update homepage failed, using KV:', e); }
+    }
+    const current = await kv.get("homepage:config");
+    await kv.set("homepage:config", JSON.stringify({ ...(current ? JSON.parse(current) : DEFAULT_HP), ...body }));
+    return respond(c, { success: true });
+  } catch (e) { return errRes(c, `Update homepage config error: ${e}`); }
+});
+
+// ═══════════════ CONTENT ═══════════════
+app.get("/make-server-ea36795c/content", async (c) => {
+  try {
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('store_settings').select('key, value');
+        if (!error && data && data.length > 0) {
+          const content: any = {};
+          for (const row of data) {
+            if (row.key === 'general' || row.key === 'social') Object.assign(content, row.value);
+            else content[row.key] = typeof row.value === 'string' ? row.value : row.value;
+          }
+          return respond(c, { content });
+        }
+      } catch (e) { console.log('DB content failed, using KV:', e); }
+    }
+    const val = await kv.get("content:data");
+    return respond(c, { content: val ? JSON.parse(val) : {} });
+  } catch (e) { return errRes(c, `Get content error: ${e}`); }
+});
+
+app.put("/make-server-ea36795c/content", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const body = await c.req.json();
+    if (await useDB()) {
+      try {
+        const generalFields = ['phone','email','whatsapp','address','store_name','store_subtitle','currency','country','shipping_fee','free_shipping_threshold'];
+        const socialFields = ['facebook','instagram','tiktok','youtube'];
+        const gU: any = {}, sU: any = {};
+        for (const [k, v] of Object.entries(body)) {
+          if (generalFields.includes(k)) gU[k] = v;
+          else if (socialFields.includes(k)) sU[k] = v;
+          else if (['about_fr','about_ar','working_hours','map_embed','faq'].includes(k)) await db.from('store_settings').upsert({ key: k, value: k === 'faq' ? v : JSON.stringify(v) });
+        }
+        if (Object.keys(gU).length > 0) { const { data: ex } = await db.from('store_settings').select('value').eq('key', 'general').single(); await db.from('store_settings').upsert({ key: 'general', value: { ...(ex?.value || {}), ...gU } }); }
+        if (Object.keys(sU).length > 0) { const { data: ex } = await db.from('store_settings').select('value').eq('key', 'social').single(); await db.from('store_settings').upsert({ key: 'social', value: { ...(ex?.value || {}), ...sU } }); }
+        return respond(c, { success: true });
+      } catch (e) { console.log('DB update content failed, using KV:', e); }
+    }
+    const current = await kv.get("content:data");
+    await kv.set("content:data", JSON.stringify({ ...(current ? JSON.parse(current) : {}), ...body }));
+    return respond(c, { success: true });
+  } catch (e) { return errRes(c, `Update content error: ${e}`); }
+});
+
+// ═══════════════ STORE SETTINGS ═══════════════
+const DEFAULT_SETTINGS = { store_name: "VERKING SCOLAIRE", store_subtitle: "STP Stationery", phone: "+213 555 123 456", email: "contact@verking-scolaire.dz", whatsapp: "+213555123456", address: "Rue des Frères Belloul, Bordj El Bahri, Alger 16111", currency: "DA", country: "Algérie", shipping_fee: 500, free_shipping_threshold: 5000 };
+
+app.get("/make-server-ea36795c/store-settings", async (c) => {
+  try {
+    if (await useDB()) {
+      try {
+        const { data } = await db.from('store_settings').select('value').eq('key', 'general').single();
+        if (data?.value) return respond(c, { settings: { ...DEFAULT_SETTINGS, ...data.value } });
+      } catch (e) { console.log('DB store-settings failed, using KV:', e); }
+    }
+    const val = await kv.get("store:settings");
+    return respond(c, { settings: val ? { ...DEFAULT_SETTINGS, ...JSON.parse(val) } : DEFAULT_SETTINGS });
+  } catch (e) { return errRes(c, `Get settings error: ${e}`); }
+});
+
+app.put("/make-server-ea36795c/store-settings", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const body = await c.req.json();
+    if (await useDB()) {
+      try {
+        const { data: ex } = await db.from('store_settings').select('value').eq('key', 'general').single();
+        await db.from('store_settings').upsert({ key: 'general', value: { ...(ex?.value || {}), ...body } });
+        return respond(c, { success: true });
+      } catch (e) { console.log('DB update store-settings failed:', e); }
+    }
+    const current = await kv.get("store:settings");
+    await kv.set("store:settings", JSON.stringify({ ...(current ? JSON.parse(current) : {}), ...body }));
+    return respond(c, { success: true });
+  } catch (e) { return errRes(c, `Update settings error: ${e}`); }
+});
+
+// ═══════════════ MEDIA ═══════════════
+app.post("/make-server-ea36795c/media/upload", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const { filename, content_type, data: fileData, size } = await c.req.json();
+    if (!fileData) return errRes(c, "No file data", 400);
+    const base64Data = fileData.includes(',') ? fileData.split(',')[1] : fileData;
+    const binary = atob(base64Data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const safeName = filename.replace(/[^a-zA-Z0-9.-]/g, '_').toLowerCase();
+    const path = `uploads/${Date.now()}-${uid()}-${safeName}`;
+    const { error: uploadError } = await db.storage.from(MEDIA_BUCKET).upload(path, bytes.buffer, { contentType: content_type || 'image/jpeg', upsert: false });
+    if (uploadError) return errRes(c, `Storage upload error: ${uploadError.message}`);
+    const { data: urlData } = db.storage.from(MEDIA_BUCKET).getPublicUrl(path);
+    const id = 'media-' + uid();
+    const media: MediaFile = { id, filename, path, url: urlData.publicUrl, content_type: content_type || 'image/jpeg', size: size || bytes.length, created_at: new Date().toISOString() };
+    if (await useDB()) {
+      try {
+        const { data: dbM } = await db.from('media_assets').insert({ filename, storage_path: path, url: urlData.publicUrl, content_type: content_type || 'image/jpeg', size_bytes: size || bytes.length }).select().single();
+        if (dbM) return respond(c, { media: { id: dbM.id, filename: dbM.filename, path: dbM.storage_path, url: dbM.url, content_type: dbM.content_type, size: dbM.size_bytes, created_at: dbM.created_at } }, 201);
+      } catch { /* fallthrough */ }
+    }
+    await setOneKV('media', id, media);
+    return respond(c, { media }, 201);
+  } catch (e) { return errRes(c, `Upload error: ${e}`); }
+});
+
+app.get("/make-server-ea36795c/media", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    if (await useDB()) {
+      try {
+        const { data, error } = await db.from('media_assets').select('*').order('created_at', { ascending: false });
+        if (!error) return respond(c, { media: (data || []).map(m => ({ id: m.id, filename: m.filename, path: m.storage_path, url: m.url, content_type: m.content_type, size: m.size_bytes, created_at: m.created_at })), total: (data || []).length });
+      } catch (e) { console.log('DB media failed, using KV:', e); }
+    }
+    const media = await getAllKV<MediaFile>('media');
+    media.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return respond(c, { media, total: media.length });
+  } catch (e) { return errRes(c, `Media list error: ${e}`); }
+});
+
+app.delete("/make-server-ea36795c/media/:id", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const id = c.req.param('id');
+    if (await useDB()) {
+      try {
+        const { data: item } = await db.from('media_assets').select('storage_path').eq('id', id).single();
+        if (item) { await db.storage.from(MEDIA_BUCKET).remove([item.storage_path]); await db.from('media_assets').delete().eq('id', id); return respond(c, { success: true }); }
+      } catch { /* fallthrough */ }
+    }
+    const item = await getOneKV<MediaFile>('media', id);
+    if (item) { try { await db.storage.from(MEDIA_BUCKET).remove([item.path]); } catch { /* ignore */ } await delOneKV('media', id); }
+    return respond(c, { success: true });
+  } catch (e) { return errRes(c, `Delete media error: ${e}`); }
+});
+
+// ═══════════════ STATS ═══════════════
+app.get("/make-server-ea36795c/stats", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    let orders: any[], customers: any[], products: any[], wholesale: any[];
+
+    if (await useDB()) {
+      try {
+        const [oR, cR, pR, wR] = await Promise.all([
+          db.from('orders').select('*').order('created_at', { ascending: false }),
+          db.from('customers').select('*'),
+          db.from('products').select('*'),
+          db.from('wholesale_requests').select('*'),
+        ]);
+        if (!oR.error) {
+          orders = oR.data || []; customers = cR.data || []; products = pR.data || []; wholesale = wR.data || [];
+          // Fetch order items
+          const orderIds = orders.map(o => o.id);
+          if (orderIds.length > 0) {
+            try {
+              const { data: items } = await db.from('order_items').select('*').in('order_id', orderIds);
+              const iMap: Record<string, any[]> = {};
+              for (const item of (items || [])) { if (!iMap[item.order_id]) iMap[item.order_id] = []; iMap[item.order_id].push(item); }
+              orders = orders.map(o => ({ ...o, items: iMap[o.id] || [] }));
+            } catch { orders = orders.map(o => ({ ...o, items: [] })); }
+          }
+          // build stats inline
+          const activeOrders = orders.filter(o => o.status !== "cancelled");
+          const totalRevenue = activeOrders.reduce((s, o) => s + Number(o.total || 0), 0);
+          const statusCounts = orders.reduce((acc: any, o) => { acc[o.status] = (acc[o.status] || 0) + 1; return acc; }, {});
+          const lowStock = products.filter(p => p.stock <= 5 && p.is_active);
+          const recentOrders = [...orders].slice(0, 10);
+          const pendingWholesale = wholesale.filter(w => w.status === "pending").length;
+          const now2 = new Date();
+          const dailyStats = [];
+          for (let i = 13; i >= 0; i--) { const d = new Date(now2); d.setDate(d.getDate() - i); const ds = d.toISOString().split('T')[0]; const dayO = orders.filter(o => o.created_at?.startsWith(ds)); dailyStats.push({ date: ds, label: d.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' }), orders: dayO.length, revenue: dayO.filter(o => o.status !== "cancelled").reduce((s, o) => s + Number(o.total || 0), 0) }); }
+          const pOC: Record<string, number> = {};
+          for (const o of orders) for (const it of (o.items || [])) { if (it.product_id) pOC[it.product_id] = (pOC[it.product_id] || 0) + (it.quantity || it.qty || 1); }
+          const topProducts = Object.entries(pOC).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, count]) => { const p = products.find(p => p.id === id); return p ? { ...p, order_count: count } : null; }).filter(Boolean);
+          const thisMonth = new Date(); thisMonth.setDate(1); thisMonth.setHours(0,0,0,0);
+          const lastMonth = new Date(thisMonth); lastMonth.setMonth(lastMonth.getMonth() - 1);
+          return respond(c, { totalRevenue, totalOrders: orders.length, totalCustomers: customers.length, totalProducts: products.length, statusCounts, lowStock, recentOrders, pendingWholesale, dailyStats, topProducts, revenueThisMonth: activeOrders.filter(o => new Date(o.created_at) >= thisMonth).reduce((s, o) => s + Number(o.total), 0), revenueLastMonth: activeOrders.filter(o => { const d = new Date(o.created_at); return d >= lastMonth && d < thisMonth; }).reduce((s, o) => s + Number(o.total), 0), ordersThisMonth: orders.filter(o => new Date(o.created_at) >= thisMonth).length, ordersLastMonth: orders.filter(o => { const d = new Date(o.created_at); return d >= lastMonth && d < thisMonth; }).length, activeProductsCount: products.filter(p => p.is_active).length });
+        }
+      } catch (e) { console.log('DB stats failed, using KV:', e); }
+    }
+
+    [orders, customers, products, wholesale] = await Promise.all([getAllKV<Order>("orders"), getAllKV<any>("customers"), getAllKV<Product>("products"), getAllKV<WholesaleRequest>("wholesale")]);
+    const activeOrders = orders.filter(o => o.status !== "cancelled");
+    const totalRevenue = activeOrders.reduce((s, o) => s + Number(o.total || 0), 0);
+    const statusCounts = orders.reduce((acc: any, o) => { acc[o.status] = (acc[o.status] || 0) + 1; return acc; }, {});
+    const lowStock = products.filter(p => p.stock <= 5 && p.is_active);
+    const recentOrders = [...orders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10);
+    const pendingWholesale = wholesale.filter(w => w.status === "pending").length;
+    const now = new Date();
+    const dailyStats = [];
+    for (let i = 13; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - i); const ds = d.toISOString().split('T')[0]; const dayO = orders.filter(o => o.created_at?.startsWith(ds)); dailyStats.push({ date: ds, label: d.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' }), orders: dayO.length, revenue: dayO.filter(o => o.status !== "cancelled").reduce((s, o) => s + Number(o.total || 0), 0) }); }
+    const pOC: Record<string, number> = {};
+    for (const o of orders) for (const it of (o.items || [])) { if (it.product_id) pOC[it.product_id] = (pOC[it.product_id] || 0) + (it.qty || 1); }
+    const topProducts = Object.entries(pOC).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, count]) => { const p = products.find(p => p.id === id); return p ? { ...p, order_count: count } : null; }).filter(Boolean);
+    const thisMonth = new Date(); thisMonth.setDate(1); thisMonth.setHours(0,0,0,0);
+    const lastMonth = new Date(thisMonth); lastMonth.setMonth(lastMonth.getMonth() - 1);
+    return respond(c, { totalRevenue, totalOrders: orders.length, totalCustomers: customers.length, totalProducts: products.length, statusCounts, lowStock, recentOrders, pendingWholesale, dailyStats, topProducts, revenueThisMonth: activeOrders.filter(o => new Date(o.created_at) >= thisMonth).reduce((s, o) => s + Number(o.total), 0), revenueLastMonth: activeOrders.filter(o => { const d = new Date(o.created_at); return d >= lastMonth && d < thisMonth; }).reduce((s, o) => s + Number(o.total), 0), ordersThisMonth: orders.filter(o => new Date(o.created_at) >= thisMonth).length, ordersLastMonth: orders.filter(o => { const d = new Date(o.created_at); return d >= lastMonth && d < thisMonth; }).length, activeProductsCount: products.filter(p => p.is_active).length });
+  } catch (e) { return errRes(c, `Stats error: ${e}`); }
+});
+
+// ═══════════════ ADMIN PASSWORD ═══════════════
+app.put("/make-server-ea36795c/admin/password", async (c) => {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const { new_password } = await c.req.json();
+    if (await useDB()) { try { await db.rpc('update_admin_password', { admin_email: 'admin@verking-scolaire.dz', new_password }); } catch { /* ignore */ } }
+    await kv.set("admin:config", JSON.stringify({ password: new_password, token: "vk-admin-secure-token-2024" }));
+    return respond(c, { success: true });
+  } catch (e) { return errRes(c, `Update password error: ${e}`); }
+});
+
+Deno.serve(app.fetch);
