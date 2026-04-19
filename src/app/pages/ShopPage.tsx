@@ -1,12 +1,15 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Search, SlidersHorizontal, X, ChevronDown, Filter, LayoutGrid, List, Sparkles, AlertCircle, Star, TrendingUp, Zap, Tag, ShoppingCart, ArrowRight } from 'lucide-react';
+import { Search, SlidersHorizontal, X, ChevronDown, Filter, LayoutGrid, List, Sparkles, AlertCircle, Star, TrendingUp, Zap, Tag, ShoppingCart } from 'lucide-react';
 import { useLang } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { useCart } from '../context/CartContext';
 import { tr, formatPrice } from '../lib/translations';
 import { api } from '../lib/api';
+import { CATEGORIES_UPDATED_EVENT, CATEGORIES_UPDATED_KEY } from '../lib/realtime';
 import { ProductCard } from '../components/ProductCard';
 import { motion, AnimatePresence } from 'motion/react';
+import { toast } from 'sonner';
 
 export function ShopPage() {
   const { lang, dir } = useLang();
@@ -20,20 +23,53 @@ export function ShopPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const catParam = searchParams.get('category') || '';
+  const querySearchParam = searchParams.get('search') || '';
   const featuredParam = searchParams.get('featured') === 'true';
   const newParam = searchParams.get('new') === 'true';
-  const bestParam = searchParams.get('best_seller') === 'true';
+  const bestParam =
+    searchParams.get('best_seller') === 'true' ||
+    searchParams.get('bestseller') === 'true';
   const promoParam = searchParams.get('promo') === 'true';
   
   const [sortBy, setSortBy] = useState('new');
   const [priceRange, setPriceRange] = useState<number>(15000); // Max default
 
+  const loadCategories = useCallback(async () => {
+    const data = await api.get('/categories').catch(() => ({ categories: [] }));
+    setCategories(data?.categories || []);
+  }, []);
+
   useEffect(() => {
     Promise.all([
       api.get('/products?active=true').then(d => setProducts(d.products || [])),
-      api.get('/categories').then(d => setCategories(d.categories || [])),
+      loadCategories(),
     ]).finally(() => setLoading(false));
-  }, []);
+  }, [loadCategories]);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (!event.key || event.key === CATEGORIES_UPDATED_KEY) {
+        loadCategories();
+      }
+    };
+
+    const onCategoriesUpdated = () => loadCategories();
+    const onFocus = () => loadCategories();
+
+    window.addEventListener('storage', onStorage);
+    window.addEventListener(CATEGORIES_UPDATED_EVENT, onCategoriesUpdated);
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(CATEGORIES_UPDATED_EVENT, onCategoriesUpdated);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [loadCategories]);
+
+  useEffect(() => {
+    setSearch(querySearchParam);
+  }, [querySearchParam]);
 
   const filtered = useMemo(() => {
     let res = [...products];
@@ -65,6 +101,17 @@ export function ShopPage() {
   const toggleFilter = (key: string) => {
     setSearchParams(prev => {
       const np = new URLSearchParams(prev);
+      if (key === 'best_seller') {
+        const isActive = np.get('best_seller') === 'true' || np.get('bestseller') === 'true';
+        if (isActive) {
+          np.delete('best_seller');
+          np.delete('bestseller');
+        } else {
+          np.set('best_seller', 'true');
+          np.delete('bestseller');
+        }
+        return np;
+      }
       if (np.get(key) === 'true') np.delete(key);
       else np.set(key, 'true');
       return np;

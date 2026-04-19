@@ -3,26 +3,34 @@ import { Outlet } from 'react-router';
 import { Navbar } from './Navbar';
 import { Footer } from './Footer';
 import { Toaster } from 'sonner';
-import { useTheme } from '../../context/ThemeContext';
 import { AnimatedBackground } from '../AnimatedBackground';
+import { NewsletterWelcomeModal } from './NewsletterWelcomeModal';
+import { AnnouncementBar } from './AnnouncementBar';
 
 export function Layout() {
-  const { theme } = useTheme();
   return (
     <div className="min-h-screen flex flex-col relative" style={{ background: 'transparent' }}>
       {/* ── Animated background (fixed, behind everything) ── */}
       <AnimatedBackground />
 
       {/* ── Content ── */}
-      <div className="relative z-10 flex flex-col flex-1">
+      <div
+        className="relative z-10 flex flex-col flex-1"
+        style={{ '--vk-navbar-height': '80px' } as React.CSSProperties}
+      >
+        <AnnouncementBar />
         <Navbar />
-        <main className="flex-1 pt-[88px]">
+        <main
+          className="flex-1"
+          style={{ paddingTop: 'calc(var(--vk-navbar-height, 80px) + var(--vk-announcement-height, 0px))' }}
+        >
           <Outlet />
         </main>
         <Footer />
       </div>
 
       <Toaster position="top-center" richColors />
+      <NewsletterWelcomeModal />
 
       {/* Floating WhatsApp Button */}
       <a

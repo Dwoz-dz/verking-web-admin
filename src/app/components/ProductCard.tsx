@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { ShoppingCart } from 'lucide-react';
 import { useLang } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
+import { useTheme } from '../context/ThemeContext';
 import { formatPrice } from '../lib/translations';
 import { toast } from 'sonner';
 
@@ -16,6 +17,7 @@ interface Product {
 export function ProductCard({ product }: { product: Product }) {
   const { lang } = useLang();
   const { addItem } = useCart();
+  const { theme } = useTheme();
   const [addedAnim, setAddedAnim] = useState(false);
 
   const name = lang === 'ar' ? product.name_ar : product.name_fr;
@@ -52,7 +54,8 @@ export function ProductCard({ product }: { product: Product }) {
   return (
     <Link
       to={`/product/${product.id}`}
-      className="group block relative rounded-xl bg-white transition-all overflow-hidden flex flex-col hover:shadow-lg hover:-translate-y-0.5 border border-gray-100"
+      className="group block relative rounded-xl transition-all overflow-hidden flex flex-col hover:shadow-lg hover:-translate-y-0.5 border"
+      style={{ backgroundColor: theme.card_color, borderColor: theme.border_color }}
     >
       {/* Upper image area */}
       <div className="relative aspect-square bg-[#F5F5F5] overflow-hidden">
@@ -75,7 +78,8 @@ export function ProductCard({ product }: { product: Product }) {
         {!isOutOfStock && (
           <button
             onClick={handleAdd}
-            className={`absolute bottom-2 right-2 rtl:right-auto rtl:left-2 w-7 h-7 rounded-full flex items-center justify-center shadow-md transition-all ${addedAnim ? 'bg-green-500 text-white scale-110' : 'bg-[#FD384F] text-white hover:bg-[#e02b3f] hover:scale-110'}`}
+            className={`absolute bottom-2 right-2 rtl:right-auto rtl:left-2 w-7 h-7 rounded-full flex items-center justify-center shadow-md transition-all text-white ${addedAnim ? 'bg-green-500 scale-110' : 'hover:opacity-90 hover:scale-110'}`}
+            style={addedAnim ? undefined : { backgroundColor: theme.accent_color }}
           >
             <ShoppingCart size={12} className={addedAnim ? 'animate-bounce' : ''} />
           </button>
@@ -93,7 +97,7 @@ export function ProductCard({ product }: { product: Product }) {
         {/* Tags row: Free shipping or Welcome Deal */}
         <div className="flex items-center gap-1 mb-1.5 flex-wrap">
           {isPromo && (
-            <span className="bg-[#FD384F] text-white text-[8px] md:text-[9px] font-bold px-1.5 py-0.5 rounded-sm">
+            <span className="text-white text-[8px] md:text-[9px] font-bold px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: theme.accent_color }}>
               {lang === 'ar' ? 'عرض ترحيبي' : 'Offre de bienvenue'}
             </span>
           )}
@@ -104,7 +108,7 @@ export function ProductCard({ product }: { product: Product }) {
 
         {/* Price block */}
         <div className="flex items-end gap-1 mb-1">
-          <span className="font-extrabold text-[13px] md:text-base text-[#FD384F] leading-none">
+          <span className="font-extrabold text-[13px] md:text-base leading-none" style={{ color: theme.accent_color }}>
             {formatPrice(effectivePrice, lang)}
           </span>
           {isPromo && (

@@ -46,7 +46,16 @@ export interface Category {
   slug: string; 
   image: string; 
   order: number; 
+  sort_order?: number;
   is_active: boolean; 
+  show_on_homepage?: boolean;
+  short_description_fr?: string;
+  short_description_ar?: string;
+  featured?: boolean;
+  mobile_icon?: string;
+  badge_color?: string;
+  card_style?: string;
+  product_count?: number;
 }
 
 export const EMPTY_PRODUCT: Partial<Product> = {

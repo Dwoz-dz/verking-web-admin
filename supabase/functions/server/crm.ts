@@ -69,3 +69,95 @@ export async function listCustomers(c: any) {
     return respond(c, { customers });
   } catch (e) { return errRes(c, `Customers list error: ${e.message}`); }
 }
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+export async function subscribeNewsletter(c: any) {
+  try {
+    const body = await c.req.json();
+    const email = normalizeEmail(String(body?.email || ""));
+
+    if (!email || !isValidEmail(email)) {
+      return errRes(c, "Invalid email address", 400);
+    }
+
+    const now = new Date().toISOString();
+    const locale = body?.locale === "ar" ? "ar" : "fr";
+    const source = String(body?.source || "newsletter_popup");
+
+    if (await useDB()) {
+      try {
+        const { data: existing, error: existingError } = await db
+          .from("newsletter_subscribers")
+          .select("id")
+          .eq("email", email)
+          .maybeSingle();
+
+        if (existingError) throw existingError;
+
+        if (existing?.id) {
+          const { error: updateError } = await db
+            .from("newsletter_subscribers")
+            .update({ locale, source, is_active: true, updated_at: now })
+            .eq("id", existing.id);
+
+          if (updateError) throw updateError;
+          return respond(c, { success: true, duplicate: true });
+        }
+
+        const { error: insertError } = await db.from("newsletter_subscribers").insert({
+          email,
+          locale,
+          source,
+          is_active: true,
+          created_at: now,
+          updated_at: now,
+        });
+
+        if (insertError) throw insertError;
+        return respond(c, { success: true, duplicate: false }, 201);
+      } catch (e) {
+        console.error("DB newsletter subscribe failed:", e.message);
+      }
+    }
+
+    const key = `newsletter:subscribers:${email}`;
+    const existing = await kv.get(key);
+    if (existing) {
+      const parsed = typeof existing === "string" ? JSON.parse(existing) : existing;
+      await kv.set(
+        key,
+        JSON.stringify({
+          ...parsed,
+          locale,
+          source,
+          is_active: true,
+          updated_at: now,
+        }),
+      );
+      return respond(c, { success: true, duplicate: true });
+    }
+
+    await kv.set(
+      key,
+      JSON.stringify({
+        id: uid(),
+        email,
+        locale,
+        source,
+        is_active: true,
+        created_at: now,
+        updated_at: now,
+      }),
+    );
+    return respond(c, { success: true, duplicate: false }, 201);
+  } catch (e) {
+    return errRes(c, `Newsletter subscribe error: ${e.message}`);
+  }
+}

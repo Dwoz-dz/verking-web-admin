@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { RefreshCw, Plus } from 'lucide-react';
 import { adminApi, api, API_BASE, apiHeaders } from '../../lib/api';
+import { emitCategoriesUpdated } from '../../lib/realtime';
 import { useAuth } from '../../context/AuthContext';
 import { useAdminUI } from '../../context/AdminUIContext';
 import { toast } from 'sonner';
@@ -27,6 +28,13 @@ const EMPTY_PRODUCT: Partial<Product> = {
   show_in_cartables: false, show_in_trousses: false, show_in_school_supplies: false,
   section_priority: 99, sort_order: 99,
 };
+
+function sortCategories(items: Category[]) {
+  return [...items].sort(
+    (left, right) =>
+      (left.sort_order ?? left.order ?? 0) - (right.sort_order ?? right.order ?? 0),
+  );
+}
 
 export function AdminProducts() {
   const { token } = useAuth();
@@ -68,7 +76,7 @@ export function AdminProducts() {
         api.get('/categories')
       ]);
       setProducts(p.products || []);
-      setCategories(c.categories || []);
+      setCategories(sortCategories(c.categories || []));
     } catch (e) {
       toast.error(`Erreur chargement: ${e}`);
     } finally {
@@ -259,6 +267,59 @@ export function AdminProducts() {
     }
   };
 
+  const handleCreateCategoryInline = useCallback(
+    async (payload: { name_fr: string; name_ar: string }) => {
+      if (!token) return null;
+
+      const nextOrder = categories.reduce((maxOrder, item) => {
+        const currentOrder = Number(item.sort_order ?? item.order ?? 0);
+        return Number.isFinite(currentOrder) ? Math.max(maxOrder, currentOrder) : maxOrder;
+      }, 0) + 1;
+
+      const response = await adminApi.post(
+        '/categories',
+        {
+          name_fr: payload.name_fr,
+          name_ar: payload.name_ar,
+          order: nextOrder,
+          is_active: true,
+          show_on_homepage: true,
+        },
+        token,
+      );
+
+      const createdRaw = response?.category;
+      if (!createdRaw?.id) {
+        throw new Error('Category creation failed');
+      }
+
+      const createdCategory: Category = {
+        id: createdRaw.id,
+        name_fr: createdRaw.name_fr || payload.name_fr,
+        name_ar: createdRaw.name_ar || payload.name_ar,
+        slug: createdRaw.slug || '',
+        image: createdRaw.image || '',
+        order: Number(createdRaw.order ?? createdRaw.sort_order ?? nextOrder) || nextOrder,
+        sort_order: Number(createdRaw.sort_order ?? createdRaw.order ?? nextOrder) || nextOrder,
+        is_active: createdRaw.is_active !== false,
+        show_on_homepage: createdRaw.show_on_homepage !== false,
+        short_description_fr: createdRaw.short_description_fr || '',
+        short_description_ar: createdRaw.short_description_ar || '',
+        featured: Boolean(createdRaw.featured),
+        mobile_icon: createdRaw.mobile_icon || '',
+        badge_color: createdRaw.badge_color || '',
+        card_style: createdRaw.card_style || 'default',
+        product_count: Number(createdRaw.product_count || 0),
+      };
+
+      setCategories((prev) => sortCategories([...prev, createdCategory]));
+      emitCategoriesUpdated();
+      toast.success('Categorie creee et reliee au site.');
+      return createdCategory;
+    },
+    [categories, token],
+  );
+
   // ── MEDIA HANDLERS ──
   const handleFileUpload = async (files: FileList) => {
     if (!token || !files.length) return;
@@ -419,6 +480,7 @@ export function AdminProducts() {
         current={current}
         setCurrent={setCurrent}
         categories={categories}
+        onCreateCategory={handleCreateCategoryInline}
         closeEditor={() => setEditorMode(null)}
         handleSave={handleSave}
         saving={saving}

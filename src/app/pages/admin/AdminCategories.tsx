@@ -1,312 +1,968 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Plus, Edit2, Trash2, X, Tag, UploadCloud, Eye, EyeOff, MoreHorizontal, MoveUp, MoveDown } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Plus,
+  Search,
+  Eye,
+  EyeOff,
+  Edit3,
+  Trash2,
+  X,
+  UploadCloud,
+  Image as ImageIcon,
+  ExternalLink,
+} from 'lucide-react';
 import { adminApi, api, API_BASE, apiHeaders } from '../../lib/api';
+import { emitCategoriesUpdated } from '../../lib/realtime';
 import { useAuth } from '../../context/AuthContext';
 import { useAdminUI } from '../../context/AdminUIContext';
 import { toast } from 'sonner';
-import { motion, AnimatePresence } from 'framer-motion';
+import {
+  normalizeOptionalHexColor,
+  normalizeOrder,
+  normalizeSafeText,
+  slugify,
+  validateBilingualPair,
+} from '../../lib/textPipeline';
 
-interface Category { id: string; name_fr: string; name_ar: string; slug: string; image: string; order: number; is_active: boolean; }
-const EMPTY: Partial<Category> = { name_fr: '', name_ar: '', slug: '', image: '', order: 99, is_active: true };
+type StatusFilter = 'all' | 'active' | 'inactive';
+type SortOption = 'order_asc' | 'order_desc' | 'visibility' | 'product_count_desc' | 'name_asc';
+
+type MediaItem = {
+  id: string;
+  url: string;
+  filename?: string;
+  content_type?: string;
+};
+
+type Category = {
+  id: string;
+  name_fr: string;
+  name_ar: string;
+  slug: string;
+  image: string;
+  order: number;
+  sort_order?: number;
+  is_active: boolean;
+  product_count: number;
+  show_on_homepage: boolean;
+  short_description_fr: string;
+  short_description_ar: string;
+  seo_title_fr: string;
+  seo_title_ar: string;
+  seo_description_fr: string;
+  seo_description_ar: string;
+  featured: boolean;
+  mobile_icon: string;
+  badge_color: string;
+  card_style: string;
+};
+
+type CategoryForm = Partial<Category>;
+
+const EMPTY_CATEGORY: CategoryForm = {
+  name_fr: '',
+  name_ar: '',
+  slug: '',
+  image: '',
+  order: 99,
+  is_active: true,
+  show_on_homepage: false,
+  short_description_fr: '',
+  short_description_ar: '',
+  seo_title_fr: '',
+  seo_title_ar: '',
+  seo_description_fr: '',
+  seo_description_ar: '',
+  featured: false,
+  mobile_icon: '',
+  badge_color: '',
+  card_style: 'default',
+};
+
+const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
+  { value: 'all', label: 'Tous les statuts' },
+  { value: 'active', label: 'Actives uniquement' },
+  { value: 'inactive', label: 'Inactives uniquement' },
+];
+
+const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
+  { value: 'order_asc', label: 'Ordre croissant' },
+  { value: 'order_desc', label: 'Ordre décroissant' },
+  { value: 'visibility', label: 'Visibilité (actives d’abord)' },
+  { value: 'product_count_desc', label: 'Nombre de produits' },
+  { value: 'name_asc', label: 'Nom (A-Z)' },
+];
+
+const CARD_STYLES = [
+  { value: 'default', label: 'Default' },
+  { value: 'highlight', label: 'Highlight' },
+  { value: 'compact', label: 'Compact' },
+];
+
+function Toggle({
+  value,
+  onChange,
+  activeLabel = 'Actif',
+  inactiveLabel = 'Inactif',
+}: {
+  value: boolean;
+  onChange: (next: boolean) => void;
+  activeLabel?: string;
+  inactiveLabel?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      className={`inline-flex items-center gap-2 rounded-full px-2 py-1 text-xs font-bold transition-colors ${
+        value ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'
+      }`}
+    >
+      <span
+        className={`h-4 w-4 rounded-full border transition-colors ${
+          value ? 'border-emerald-500 bg-emerald-500' : 'border-gray-500 bg-white'
+        }`}
+      />
+      {value ? activeLabel : inactiveLabel}
+    </button>
+  );
+}
+
+function validateCategoryPayload(payload: CategoryForm) {
+  const issues: string[] = [];
+  issues.push(...validateBilingualPair(
+    String(payload.name_fr || ''),
+    String(payload.name_ar || ''),
+    'Nom français',
+    'الاسم العربي',
+  ));
+
+  if (!normalizeSafeText(payload.slug, '')) {
+    issues.push('Le slug est obligatoire.');
+  }
+
+  if (payload.badge_color && !normalizeOptionalHexColor(payload.badge_color)) {
+    issues.push('La couleur du badge doit être un HEX valide.');
+  }
+
+  return issues;
+}
 
 export function AdminCategories() {
   const { token } = useAuth();
-  const { t, isDark } = useAdminUI();
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState<'add' | 'edit' | null>(null);
-  const [current, setCurrent] = useState<Partial<Category>>(EMPTY);
-  const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { t } = useAdminUI();
 
-  const load = async () => {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [modal, setModal] = useState<'add' | 'edit' | null>(null);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [previewCategory, setPreviewCategory] = useState<Category | null>(null);
+  const [form, setForm] = useState<CategoryForm>(EMPTY_CATEGORY);
+  const [slugEdited, setSlugEdited] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('order_asc');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const loadCategories = async () => {
     try {
-      const d = await api.get('/categories');
-      // Sort by order
-      const sorted = (d.categories || []).sort((a: Category, b: Category) => (a.order || 99) - (b.order || 99));
-      setCategories(sorted);
-    } catch (e) {
-      console.error(e);
+      const data = await api.get('/categories');
+      const next = Array.isArray(data?.categories) ? data.categories : [];
+      setCategories(next);
+    } catch (error) {
+      console.error(error);
+      toast.error('Impossible de charger les catégories.');
     } finally {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); }, []);
 
-  const openAdd = () => { setCurrent({ ...EMPTY }); setModal('add'); };
-  const openEdit = (c: Category) => { setCurrent({ ...c }); setModal('edit'); };
-  const closeModal = () => { setModal(null); setCurrent(EMPTY); };
-
-  const handleNameFrChange = (v: string) => {
-    setCurrent(p => ({
-      ...p, name_fr: v,
-      slug: p.slug || v.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
-    }));
+  const loadMedia = async () => {
+    if (!token) return;
+    try {
+      const response = await adminApi.get('/media', token);
+      const items = Array.isArray(response?.media) ? response.media : [];
+      const images = items.filter((item: MediaItem) => item?.content_type?.startsWith('image/'));
+      setMedia(images);
+    } catch {
+      setMedia([]);
+    }
   };
 
-  const handleFileUpload = async (file: File) => {
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  useEffect(() => {
+    loadMedia();
+  }, [token]);
+
+  const normalizedRows = useMemo(() => {
+    return categories.map((item, index) => {
+      const orderValue = normalizeOrder(item?.order ?? item?.sort_order ?? index, index, 9999);
+      return {
+        ...item,
+        order: orderValue,
+        product_count: Number.isFinite(Number(item?.product_count)) ? Number(item.product_count) : 0,
+        name_fr: normalizeSafeText(item?.name_fr, ''),
+        name_ar: normalizeSafeText(item?.name_ar, ''),
+        slug: normalizeSafeText(item?.slug, ''),
+        image: normalizeSafeText(item?.image, ''),
+        short_description_fr: normalizeSafeText(item?.short_description_fr, ''),
+        short_description_ar: normalizeSafeText(item?.short_description_ar, ''),
+        seo_title_fr: normalizeSafeText(item?.seo_title_fr, ''),
+        seo_title_ar: normalizeSafeText(item?.seo_title_ar, ''),
+        seo_description_fr: normalizeSafeText(item?.seo_description_fr, ''),
+        seo_description_ar: normalizeSafeText(item?.seo_description_ar, ''),
+        mobile_icon: normalizeSafeText(item?.mobile_icon, ''),
+        badge_color: normalizeOptionalHexColor(item?.badge_color),
+        card_style: normalizeSafeText(item?.card_style, 'default') || 'default',
+        show_on_homepage: Boolean(item?.show_on_homepage),
+        featured: Boolean(item?.featured),
+        is_active: item?.is_active !== false,
+      } as Category;
+    });
+  }, [categories]);
+
+  const rows = useMemo(() => {
+    const term = normalizeSafeText(search, '').toLowerCase();
+    const filtered = normalizedRows.filter((item) => {
+      if (statusFilter === 'active' && !item.is_active) return false;
+      if (statusFilter === 'inactive' && item.is_active) return false;
+      if (!term) return true;
+
+      const haystack = [
+        item.name_fr,
+        item.name_ar,
+        item.slug,
+        item.short_description_fr,
+        item.short_description_ar,
+      ]
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(term);
+    });
+
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      switch (sortBy) {
+        case 'order_desc':
+          return b.order - a.order;
+        case 'visibility':
+          return Number(b.is_active) - Number(a.is_active) || a.order - b.order;
+        case 'product_count_desc':
+          return b.product_count - a.product_count || a.order - b.order;
+        case 'name_asc':
+          return a.name_fr.localeCompare(b.name_fr, 'fr');
+        case 'order_asc':
+        default:
+          return a.order - b.order;
+      }
+    });
+
+    return sorted;
+  }, [normalizedRows, search, statusFilter, sortBy]);
+
+  const openAdd = () => {
+    setForm({ ...EMPTY_CATEGORY });
+    setSlugEdited(false);
+    setModal('add');
+  };
+
+  const openEdit = (item: Category) => {
+    setForm({ ...item });
+    setSlugEdited(true);
+    setModal('edit');
+  };
+
+  const closeModal = () => {
+    setModal(null);
+    setMediaPickerOpen(false);
+    setForm({ ...EMPTY_CATEGORY });
+    setSlugEdited(false);
+  };
+
+  const setField = <K extends keyof CategoryForm>(key: K, value: CategoryForm[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const onFrenchNameChange = (value: string) => {
+    const normalized = normalizeSafeText(value, '');
+    setForm((prev) => {
+      const next: CategoryForm = { ...prev, name_fr: normalized };
+      if (!slugEdited) {
+        const generated = slugify(normalized);
+        next.slug = generated;
+      }
+      return next;
+    });
+  };
+
+  const onSlugChange = (value: string) => {
+    setSlugEdited(true);
+    setField('slug', slugify(value));
+  };
+
+  const normalizePayload = (raw: CategoryForm) => {
+    const safeNameFr = normalizeSafeText(raw.name_fr, '');
+    const safeNameAr = normalizeSafeText(raw.name_ar, '');
+    const safeSlug = slugify(normalizeSafeText(raw.slug, safeNameFr));
+    return {
+      id: raw.id,
+      name_fr: safeNameFr,
+      name_ar: safeNameAr,
+      slug: safeSlug,
+      image: normalizeSafeText(raw.image, ''),
+      order: normalizeOrder(raw.order, 99, 9999),
+      is_active: raw.is_active !== false,
+      show_on_homepage: Boolean(raw.show_on_homepage),
+      short_description_fr: normalizeSafeText(raw.short_description_fr, ''),
+      short_description_ar: normalizeSafeText(raw.short_description_ar, ''),
+      seo_title_fr: normalizeSafeText(raw.seo_title_fr, ''),
+      seo_title_ar: normalizeSafeText(raw.seo_title_ar, ''),
+      seo_description_fr: normalizeSafeText(raw.seo_description_fr, ''),
+      seo_description_ar: normalizeSafeText(raw.seo_description_ar, ''),
+      featured: Boolean(raw.featured),
+      mobile_icon: normalizeSafeText(raw.mobile_icon, ''),
+      badge_color: normalizeOptionalHexColor(raw.badge_color),
+      card_style: normalizeSafeText(raw.card_style, 'default') || 'default',
+    };
+  };
+
+  const saveCategory = async () => {
+    if (!token) return;
+    const payload = normalizePayload(form);
+    const issues = validateCategoryPayload(payload);
+    if (issues.length) {
+      toast.error(issues[0]);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      if (modal === 'add') {
+        await adminApi.post('/categories', payload, token);
+        toast.success('Catégorie créée.');
+      } else {
+        await adminApi.put(`/categories/${payload.id}`, payload, token);
+        toast.success('Catégorie mise à jour.');
+      }
+      closeModal();
+      await loadCategories();
+      emitCategoriesUpdated();
+    } catch (error) {
+      console.error(error);
+      toast.error('Échec de sauvegarde de la catégorie.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const removeCategory = async (item: Category) => {
+    if (!token) return;
+    if (!window.confirm(`Supprimer "${item.name_fr}" ?`)) return;
+    try {
+      await adminApi.del(`/categories/${item.id}`, token);
+      toast.success('Catégorie supprimée.');
+      await loadCategories();
+      emitCategoriesUpdated();
+    } catch (error) {
+      console.error(error);
+      toast.error('Suppression impossible.');
+    }
+  };
+
+  const toggleVisibility = async (item: Category) => {
+    if (!token) return;
+    try {
+      await adminApi.put(
+        `/categories/${item.id}`,
+        { is_active: !item.is_active },
+        token,
+      );
+      await loadCategories();
+      emitCategoriesUpdated();
+    } catch (error) {
+      console.error(error);
+      toast.error('Impossible de changer la visibilité.');
+    }
+  };
+
+  const uploadMedia = async (file: File) => {
     if (!token) return;
     setUploading(true);
     try {
       const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64 = e.target?.result as string;
-        const res = await fetch(`${API_BASE}/media/upload`, {
-          method: 'POST',
-          headers: apiHeaders(token),
-          body: JSON.stringify({ filename: file.name, content_type: file.type, data: base64, size: file.size }),
-        });
-        if (!res.ok) throw new Error('Upload failed');
-        const data = await res.json();
-        setCurrent(p => ({ ...p, image: data.media.url }));
-        toast.success('Image prête !');
-        setUploading(false);
+      reader.onload = async (event) => {
+        try {
+          const base64 = String(event.target?.result || '');
+          const response = await fetch(`${API_BASE}/media/upload`, {
+            method: 'POST',
+            headers: apiHeaders(token),
+            body: JSON.stringify({
+              filename: file.name,
+              content_type: file.type,
+              data: base64,
+              size: file.size,
+            }),
+          });
+          if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
+          const data = await response.json();
+          const url = normalizeSafeText(data?.media?.url, '');
+          if (url) {
+            setField('image', url);
+            toast.success('Image uploadée.');
+            await loadMedia();
+          }
+        } catch (error) {
+          console.error(error);
+          toast.error('Upload échoué.');
+        } finally {
+          setUploading(false);
+        }
       };
       reader.readAsDataURL(file);
-    } catch (e) {
-      toast.error('Erreur upload');
+    } catch (error) {
+      console.error(error);
       setUploading(false);
+      toast.error('Upload échoué.');
     }
   };
 
-  const handleSave = async () => {
-    if (!token || !current.name_fr) { toast.error('Nom requis'); return; }
-    setSaving(true);
-    try {
-      if (modal === 'add') await adminApi.post('/categories', current, token);
-      else await adminApi.put(`/categories/${current.id}`, current, token);
-      toast.success(modal === 'add' ? 'Catégorie créée' : 'Mis à jour');
-      closeModal();
-      load();
-    } catch (e) { toast.error(`Erreur: ${e}`); }
-    finally { setSaving(false); }
-  };
+  if (loading) {
+    return (
+      <div className="flex h-72 items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-200 border-t-blue-700" />
+      </div>
+    );
+  }
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Supprimer "${name}" ?`) || !token) return;
-    try { 
-      await adminApi.del(`/categories/${id}`, token); 
-      toast.success('Supprimé'); 
-      load(); 
-    } catch (e) { 
-      toast.error('Erreur suppression'); 
-    }
-  };
-
-  const toggleActive = async (cat: Category) => {
-    if (!token) return;
-    try {
-      await adminApi.put(`/categories/${cat.id}`, { is_active: !cat.is_active }, token);
-      load();
-    } catch (e) {
-      toast.error('Erreur statut');
-    }
-  };
-
-  if (loading) return (
-    <div className="flex flex-col items-center justify-center h-96 gap-4">
-      <div className="w-12 h-12 rounded-full animate-spin border-4 border-blue-100 border-t-blue-900" />
-      <p className={`text-sm font-bold ${t.textMuted} animate-pulse`}>Chargement des catégories...</p>
-    </div>
-  );
+  const activeCount = normalizedRows.filter((item) => item.is_active).length;
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className={`text-3xl font-black ${t.text} tracking-tight`}>Catégories</h1>
-          <p className={`text-sm ${t.textMuted} mt-1`}>{categories.length} segments organisés pour votre boutique</p>
+          <h1 className={`text-3xl font-black ${t.text}`}>Catégories</h1>
+          <p className={`mt-1 text-sm ${t.textMuted}`}>
+            Module merchandising catégories: visibilite, ordre, bilingue FR/AR, image et SEO.
+          </p>
         </div>
-        <button onClick={openAdd} className="flex items-center gap-3 px-6 py-3 bg-[#1A3C6E] hover:bg-[#0d2447] text-white font-black rounded-2xl text-sm transition-all shadow-xl shadow-blue-900/20 active:scale-95">
-          <Plus size={20} /> Nouveau segment
+        <button
+          type="button"
+          onClick={openAdd}
+          className="inline-flex items-center gap-2 rounded-2xl bg-[#1A3C6E] px-5 py-3 text-sm font-black text-white transition-transform hover:scale-[1.01] active:scale-[0.99]"
+        >
+          <Plus size={16} />
+          Ajouter catégorie
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {categories.map((cat, i) => (
-          <motion.div 
-            key={cat.id} 
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-            className={`group relative ${t.card} rounded-[2rem] overflow-hidden border ${t.cardBorder} shadow-sm hover:shadow-xl transition-all duration-300 ${!cat.is_active ? 'opacity-50 grayscale' : ''}`}
+      <div className={`${t.card} ${t.cardBorder} rounded-2xl border p-4 shadow-sm`}>
+        <div className="grid gap-3 md:grid-cols-[1fr_220px_220px]">
+          <label className="relative">
+            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Rechercher par nom, slug, texte..."
+              className={`w-full rounded-xl border py-2.5 pl-9 pr-3 text-sm ${t.input}`}
+            />
+          </label>
+
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+            className={`rounded-xl border px-3 py-2.5 text-sm ${t.input}`}
           >
-            <div className="aspect-[4/3] relative overflow-hidden bg-gray-50">
-              {cat.image ? (
-                <img src={cat.image} alt={cat.name_fr} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-              ) : (
-                <div className={`w-full h-full flex items-center justify-center ${t.cardSubtle}`}>
-                  <Tag size={40} className={t.textMuted} />
-                </div>
-              )}
-              
-              <div className="absolute top-4 left-4">
-                  <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg ${cat.is_active ? 'bg-emerald-500 text-white' : 'bg-gray-500 text-white'}`}>
-                    {cat.is_active ? 'Public' : 'Masqué'}
-                  </span>
-              </div>
+            {STATUS_FILTERS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
 
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
-                 <div className="flex gap-2 w-full">
-                   <button onClick={() => openEdit(cat)} className={`flex-1 py-2.5 ${isDark ? 'bg-white text-blue-900' : 'bg-[#1A3C6E] text-white'} rounded-xl text-xs font-black shadow-lg hover:bg-amber-500 hover:text-white transition-colors`}>
-                     Modifier
-                   </button>
-                   <button onClick={() => toggleActive(cat)} className="aspect-square w-10 bg-white/20 backdrop-blur-md text-white rounded-xl flex items-center justify-center hover:bg-orange-500 transition-colors">
-                     {cat.is_active ? <EyeOff size={16} /> : <Eye size={16} />}
-                   </button>
-                 </div>
-              </div>
-            </div>
+          <select
+            value={sortBy}
+            onChange={(event) => setSortBy(event.target.value as SortOption)}
+            className={`rounded-xl border px-3 py-2.5 text-sm ${t.input}`}
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-            <div className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="min-w-0">
-                  <h3 className={`font-black ${t.text} truncate text-lg tracking-tight`}>{cat.name_fr}</h3>
-                  <p className={`text-sm ${t.textMuted} mb-3`} dir="rtl">{cat.name_ar}</p>
-                  
-                  <div className="flex items-center gap-3">
-                    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg ${t.cardSubtle} border ${t.cardBorder}`}>
-                       <span className={`text-[10px] font-black ${t.textMuted}`}>ORDRE</span>
-                       <span className={`text-[10px] font-black ${t.text}`}>{cat.order}</span>
-                    </div>
-                    <span className={`text-[10px] font-bold ${t.textMuted}`}>/{cat.slug}</span>
-                  </div>
-                </div>
-                <button onClick={() => handleDelete(cat.id, cat.name_fr)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors shrink-0">
-                   <Trash2 size={18} />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-
-        {categories.length === 0 && (
-          <div className={`col-span-full ${t.card} rounded-[3rem] p-24 text-center border-2 border-dashed ${t.cardBorder}`}>
-            <div className={`w-20 h-20 mx-auto mb-6 rounded-[2rem] ${t.cardSubtle} flex items-center justify-center`}>
-              <Tag size={40} className={t.textMuted} />
-            </div>
-            <h3 className={`text-xl font-black ${t.text} mb-2`}>Aucune catégorie</h3>
-            <p className={t.textMuted}>Commencez par organiser vos produits en segments.</p>
-            <button onClick={openAdd} className="mt-8 px-8 py-3 bg-[#1A3C6E] text-white font-black rounded-2xl shadow-xl shadow-blue-900/10 active:scale-95 transition-all">
-               Créer ma première catégorie
-            </button>
-          </div>
-        )}
+        <div className={`mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold ${t.textMuted}`}>
+          <span>Total: {normalizedRows.length}</span>
+          <span>•</span>
+          <span>Actives: {activeCount}</span>
+          <span>•</span>
+          <span>Inactives: {normalizedRows.length - activeCount}</span>
+        </div>
       </div>
 
-      <AnimatePresence>
-        {modal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeModal} className="absolute inset-0 bg-blue-950/40 backdrop-blur-md" />
-            <motion.div 
-              initial={{ scale: 0.9, y: 20, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.9, y: 20, opacity: 0 }}
-              className={`${t.card} rounded-[2.5rem] w-full max-w-xl shadow-2xl relative overflow-hidden border ${t.cardBorder}`}
-            >
-              <div className={`flex items-center justify-between p-8 border-b ${t.cardBorder}`}>
-                <div>
-                  <h2 className={`text-xl font-black ${t.text}`}>{modal === 'add' ? 'Nouveau Segment' : 'Expert Modif'}</h2>
-                  <p className={`text-xs ${t.textMuted}`}>Configuration de l'identité du point de vente</p>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {rows.map((item) => (
+          <div key={item.id} className={`${t.card} ${t.cardBorder} rounded-2xl border shadow-sm`}>
+            <div className="relative aspect-[16/10] overflow-hidden rounded-t-2xl bg-gray-100">
+              {item.image ? (
+                <img src={item.image} alt={item.name_fr} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-gray-400">
+                  <ImageIcon size={28} />
                 </div>
-                <button onClick={closeModal} className={`p-3 rounded-2xl hover:bg-gray-100 ${t.rowHover} transition-colors`}>
-                  <X size={20} className={t.textMuted} />
-                </button>
+              )}
+              <div className="absolute left-3 top-3 flex gap-2">
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${item.is_active ? 'bg-emerald-500 text-white' : 'bg-gray-500 text-white'}`}>
+                  {item.is_active ? 'PUBLIC' : 'MASQUEE'}
+                </span>
+                {item.featured && (
+                  <span className="rounded-full bg-amber-500 px-2.5 py-1 text-[10px] font-black text-white">FEATURED</span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3 p-4">
+              <div>
+                <h3 className={`truncate text-base font-black ${t.text}`}>{item.name_fr}</h3>
+                <p className={`truncate text-sm ${t.textMuted}`} dir="rtl">{item.name_ar}</p>
               </div>
 
-              <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
-                {/* Names */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div>
-                    <label className={`block text-[10px] font-black uppercase tracking-widest ${t.textMuted} mb-2`}>Désignation (FR)</label>
-                    <input value={current.name_fr || ''} onChange={e => handleNameFrChange(e.target.value)} placeholder="ex: Cartables Premium" className={`w-full px-5 py-3.5 ${t.input} border rounded-2xl text-sm font-bold focus:ring-4 focus:ring-blue-500/10 transition-all outline-none`} />
-                  </div>
-                  <div>
-                    <label className={`block text-[10px] font-black uppercase tracking-widest ${t.textMuted} mb-2`}>الإسم (AR)</label>
-                    <input value={current.name_ar || ''} onChange={e => setCurrent(p => ({ ...p, name_ar: e.target.value }))} placeholder="الكرطابلات" dir="rtl" className={`w-full px-5 py-3.5 ${t.input} border rounded-2xl text-sm font-bold shadow-sm focus:ring-4 focus:ring-blue-500/10 transition-all outline-none`} />
-                  </div>
+              <div className={`grid grid-cols-3 gap-2 text-[11px] ${t.textMuted}`}>
+                <div className="rounded-lg bg-gray-100 px-2 py-1 text-center">
+                  <div className="font-bold text-gray-700">Slug</div>
+                  <div className="truncate">/{item.slug}</div>
+                </div>
+                <div className="rounded-lg bg-gray-100 px-2 py-1 text-center">
+                  <div className="font-bold text-gray-700">Produits</div>
+                  <div>{item.product_count}</div>
+                </div>
+                <div className="rounded-lg bg-gray-100 px-2 py-1 text-center">
+                  <div className="font-bold text-gray-700">Ordre</div>
+                  <div>{item.order}</div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPreviewCategory(item)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100"
+                >
+                  <ExternalLink size={13} />
+                  Preview
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openEdit(item)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-blue-200 px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                >
+                  <Edit3 size={13} />
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleVisibility(item)}
+                  className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
+                    item.is_active
+                      ? 'border-orange-200 text-orange-700 hover:bg-orange-50'
+                      : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                  }`}
+                >
+                  {item.is_active ? <EyeOff size={13} /> : <Eye size={13} />}
+                  {item.is_active ? 'Masquer' : 'Publier'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeCategory(item)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                >
+                  <Trash2 size={13} />
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {rows.length === 0 && (
+        <div className={`${t.card} ${t.cardBorder} rounded-2xl border p-10 text-center`}>
+          <p className={`text-sm font-semibold ${t.textMuted}`}>
+            Aucune catégorie trouvée avec les filtres actuels.
+          </p>
+        </div>
+      )}
+
+      {modal && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4">
+          <div className={`${t.card} ${t.cardBorder} max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border shadow-2xl`}>
+            <div className={`sticky top-0 z-10 flex items-center justify-between border-b ${t.divider} ${t.card} px-6 py-4`}>
+              <div>
+                <h2 className={`text-xl font-black ${t.text}`}>
+                  {modal === 'add' ? 'Nouvelle catégorie' : 'Modifier catégorie'}
+                </h2>
+                <p className={`text-xs ${t.textMuted}`}>
+                  FR/AR, merchandising, SEO et paramètres de visibilité.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-xl p-2 text-gray-500 hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid gap-6 px-6 py-5 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <LabeledInput
+                    label="Nom FR *"
+                    value={String(form.name_fr || '')}
+                    onChange={onFrenchNameChange}
+                    placeholder="Cartables premium"
+                  />
+                  <LabeledInput
+                    label="الاسم AR *"
+                    value={String(form.name_ar || '')}
+                    onChange={(value) => setField('name_ar', normalizeSafeText(value, ''))}
+                    placeholder="محافظ مدرسية"
+                    dir="rtl"
+                  />
                 </div>
 
-                {/* Media Section */}
-                <div>
-                  <label className={`block text-[10px] font-black uppercase tracking-widest ${t.textMuted} mb-3`}>Visuel de couverture</label>
-                  <div className={`relative rounded-3xl overflow-hidden border-2 border-dashed ${t.cardBorder} min-h-[160px] group transition-all`}>
-                    {current.image ? (
-                      <div className="relative h-full">
-                        <img src={current.image} alt="Preview" className="w-full h-40 object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                           <button onClick={() => setCurrent(p => ({ ...p, image: '' }))} className="px-4 py-2 bg-red-500 text-white font-black rounded-xl text-xs shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-all">
-                              Supprimer le visuel
-                           </button>
-                        </div>
-                      </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <LabeledInput
+                    label="Slug"
+                    value={String(form.slug || '')}
+                    onChange={onSlugChange}
+                    placeholder="cartables-premium"
+                  />
+                  <LabeledInput
+                    label="Ordre / Priorité"
+                    type="number"
+                    value={String(form.order ?? 99)}
+                    onChange={(value) => setField('order', normalizeOrder(value, 99, 9999))}
+                  />
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <LabeledTextarea
+                    label="Description courte FR"
+                    value={String(form.short_description_fr || '')}
+                    onChange={(value) => setField('short_description_fr', normalizeSafeText(value, ''))}
+                  />
+                  <LabeledTextarea
+                    label="الوصف القصير AR"
+                    value={String(form.short_description_ar || '')}
+                    onChange={(value) => setField('short_description_ar', normalizeSafeText(value, ''))}
+                    dir="rtl"
+                  />
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <LabeledInput
+                    label="SEO titre FR"
+                    value={String(form.seo_title_fr || '')}
+                    onChange={(value) => setField('seo_title_fr', normalizeSafeText(value, ''))}
+                  />
+                  <LabeledInput
+                    label="SEO عنوان AR"
+                    value={String(form.seo_title_ar || '')}
+                    onChange={(value) => setField('seo_title_ar', normalizeSafeText(value, ''))}
+                    dir="rtl"
+                  />
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <LabeledTextarea
+                    label="SEO description FR"
+                    value={String(form.seo_description_fr || '')}
+                    onChange={(value) => setField('seo_description_fr', normalizeSafeText(value, ''))}
+                  />
+                  <LabeledTextarea
+                    label="SEO وصف AR"
+                    value={String(form.seo_description_ar || '')}
+                    onChange={(value) => setField('seo_description_ar', normalizeSafeText(value, ''))}
+                    dir="rtl"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2 rounded-2xl border border-gray-200 p-3">
+                  <p className="text-xs font-black uppercase tracking-wide text-gray-500">
+                    Visuel catégorie
+                  </p>
+                  <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+                    {form.image ? (
+                      <img src={String(form.image)} alt="preview" className="h-36 w-full object-cover" />
                     ) : (
-                      <div 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="h-40 flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors"
-                      >
-                         {uploading ? (
-                           <div className="w-8 h-8 rounded-full border-4 border-blue-100 border-t-blue-700 animate-spin" />
-                         ) : (
-                           <>
-                             <div className="w-12 h-12 mb-3 bg-blue-50 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center text-blue-600">
-                                <UploadCloud size={24} />
-                             </div>
-                             <p className={`text-xs font-bold ${t.text}`}>Déposez votre image ici</p>
-                             <p className={`text-[10px] ${t.textMuted} mt-1 uppercase tracking-tight`}>JPG, PNG — Max 5MB</p>
-                           </>
-                         )}
+                      <div className="flex h-36 items-center justify-center text-gray-400">
+                        <ImageIcon size={28} />
                       </div>
                     )}
                   </div>
-                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ''; }} />
-                  
-                  <div className="mt-4 flex items-center gap-3">
-                     <span className={`text-[10px] font-black ${t.textMuted}`}>LIEN DIRECT :</span>
-                     <input 
-                       type="text" value={current.image || ''} onChange={e => setCurrent(p => ({ ...p, image: e.target.value }))}
-                       placeholder="https://..." className={`flex-1 px-4 py-2 ${t.input} border rounded-xl text-[10px] font-mono outline-none`}
-                     />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1 rounded-xl bg-[#1A3C6E] px-3 py-2 text-xs font-bold text-white"
+                    >
+                      <UploadCloud size={14} />
+                      {uploading ? 'Upload...' : 'Upload'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMediaPickerOpen(true)}
+                      className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-100"
+                    >
+                      Médiathèque
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setField('image', '')}
+                      className="rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50"
+                    >
+                      Retirer
+                    </button>
                   </div>
+                  <LabeledInput
+                    label="URL image"
+                    value={String(form.image || '')}
+                    onChange={(value) => setField('image', normalizeSafeText(value, ''))}
+                    placeholder="https://..."
+                  />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) uploadMedia(file);
+                      event.target.value = '';
+                    }}
+                  />
                 </div>
 
-                {/* Slug & Order */}
-                <div className="grid grid-cols-2 gap-6">
-                   <div>
-                      <label className={`block text-[10px] font-black uppercase tracking-widest ${t.textMuted} mb-2`}>Slug URL</label>
-                      <input value={current.slug || ''} onChange={e => setCurrent(p => ({ ...p, slug: e.target.value }))} className={`w-full px-5 py-3 ${t.input} border rounded-2xl text-xs font-mono outline-none`} />
-                   </div>
-                   <div>
-                      <label className={`block text-[10px] font-black uppercase tracking-widest ${t.textMuted} mb-2`}>Ordre Prioritaire</label>
-                      <input type="number" value={current.order ?? 99} onChange={e => setCurrent(p => ({ ...p, order: Number(e.target.value) }))} className={`w-full px-5 py-3 ${t.input} border rounded-2xl text-xs font-black outline-none`} />
-                   </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <LabeledInput
+                    label="Icône mobile"
+                    value={String(form.mobile_icon || '')}
+                    onChange={(value) => setField('mobile_icon', normalizeSafeText(value, ''))}
+                    placeholder="emoji ou code"
+                  />
+                  <LabeledInput
+                    label="Badge color (HEX)"
+                    value={String(form.badge_color || '')}
+                    onChange={(value) => setField('badge_color', value)}
+                    placeholder="#1A3C6E"
+                  />
                 </div>
 
-                {/* Status Toggle */}
-                <div 
-                  onClick={() => setCurrent(p => ({ ...p, is_active: !p.is_active }))}
-                  className={`flex items-center justify-between p-5 rounded-2xl border cursor-pointer transition-all ${current.is_active ? 'bg-emerald-50 border-emerald-200' : `${t.cardSubtle} border-gray-200 shadow-inner`}`}
-                >
-                   <div className="flex items-center gap-4">
-                      <div className={`w-4 h-4 rounded-full border-2 ${current.is_active ? 'bg-emerald-500 border-white ring-4 ring-emerald-100' : 'bg-gray-200 border-gray-300'}`} />
-                      <div>
-                         <p className={`text-sm font-black ${current.is_active ? 'text-emerald-900' : t.text}`}>Visibilité Publique</p>
-                         <p className={`text-[10px] font-bold ${current.is_active ? 'text-emerald-600' : t.textMuted}`}>Afficher cette collection sur le site et l'app</p>
-                      </div>
-                   </div>
+                <label className="space-y-1 text-xs font-semibold text-gray-600">
+                  <span>Style carte</span>
+                  <select
+                    value={String(form.card_style || 'default')}
+                    onChange={(event) => setField('card_style', event.target.value)}
+                    className={`w-full rounded-xl border px-3 py-2 text-sm ${t.input}`}
+                  >
+                    {CARD_STYLES.map((style) => (
+                      <option key={style.value} value={style.value}>
+                        {style.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="grid gap-2">
+                  <Toggle
+                    value={form.is_active !== false}
+                    onChange={(next) => setField('is_active', next)}
+                    activeLabel="Visible"
+                    inactiveLabel="Masquée"
+                  />
+                  <Toggle
+                    value={Boolean(form.show_on_homepage)}
+                    onChange={(next) => setField('show_on_homepage', next)}
+                    activeLabel="Affichée sur accueil"
+                    inactiveLabel="Masquée sur accueil"
+                  />
+                  <Toggle
+                    value={Boolean(form.featured)}
+                    onChange={(next) => setField('featured', next)}
+                    activeLabel="Featured"
+                    inactiveLabel="Standard"
+                  />
                 </div>
               </div>
+            </div>
 
-              <div className={`p-8 bg-gray-50 dark:bg-blue-950/20 border-t ${t.cardBorder} flex gap-4`}>
-                <button onClick={closeModal} className={`flex-1 py-4 font-black rounded-2xl text-sm ${t.textMuted} hover:bg-white transition-all`}>Annuler</button>
-                <button 
-                  onClick={handleSave} disabled={saving} 
-                  className="flex-1 py-4 bg-[#1A3C6E] text-white font-black rounded-2xl text-sm shadow-xl shadow-blue-900/20 hover:bg-[#0d2447] disabled:opacity-50 transition-all active:scale-95"
-                >
-                  {saving ? 'Synchronisation...' : 'Enregistrer'}
-                </button>
-              </div>
-            </motion.div>
+            <div className={`flex items-center justify-end gap-2 border-t ${t.divider} px-6 py-4`}>
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={saveCategory}
+                disabled={submitting}
+                className="rounded-xl bg-[#1A3C6E] px-5 py-2 text-sm font-black text-white disabled:opacity-60"
+              >
+                {submitting ? 'Enregistrement...' : modal === 'add' ? 'Créer' : 'Mettre à jour'}
+              </button>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
+
+      {mediaPickerOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4">
+          <div className={`${t.card} ${t.cardBorder} w-full max-w-4xl rounded-3xl border p-4`}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className={`text-lg font-black ${t.text}`}>Médiathèque images</h3>
+              <button
+                type="button"
+                onClick={() => setMediaPickerOpen(false)}
+                className="rounded-xl p-2 text-gray-500 hover:bg-gray-100"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="grid max-h-[70vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 lg:grid-cols-4">
+              {media.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setField('image', item.url);
+                    setMediaPickerOpen(false);
+                  }}
+                  className="overflow-hidden rounded-xl border border-gray-200 bg-white text-left hover:border-blue-300"
+                >
+                  <img src={item.url} alt={item.filename || 'media'} className="h-28 w-full object-cover" />
+                  <p className="truncate px-2 py-1 text-[11px] font-semibold text-gray-600">
+                    {item.filename || 'image'}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previewCategory && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
+          <div className={`${t.card} ${t.cardBorder} w-full max-w-md rounded-3xl border p-4`}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className={`text-lg font-black ${t.text}`}>Prévisualisation catégorie</h3>
+              <button
+                type="button"
+                onClick={() => setPreviewCategory(null)}
+                className="rounded-xl p-2 text-gray-500 hover:bg-gray-100"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-gray-200">
+              <div className="aspect-[16/10] bg-gray-100">
+                {previewCategory.image ? (
+                  <img src={previewCategory.image} alt={previewCategory.name_fr} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-gray-400">
+                    <ImageIcon size={28} />
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1 p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-black text-gray-900">{previewCategory.name_fr}</p>
+                  {previewCategory.badge_color && (
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-black text-white"
+                      style={{ backgroundColor: previewCategory.badge_color }}
+                    >
+                      Badge
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500" dir="rtl">{previewCategory.name_ar}</p>
+                <p className="text-xs text-gray-600">
+                  {previewCategory.short_description_fr || 'Description catégorie'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function LabeledInput({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  placeholder = '',
+  dir,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  placeholder?: string;
+  dir?: 'rtl' | 'ltr';
+}) {
+  return (
+    <label className="space-y-1 text-xs font-semibold text-gray-600">
+      <span>{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        dir={dir}
+        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-blue-300 focus:outline-none"
+      />
+    </label>
+  );
+}
+
+function LabeledTextarea({
+  label,
+  value,
+  onChange,
+  dir,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  dir?: 'rtl' | 'ltr';
+}) {
+  return (
+    <label className="space-y-1 text-xs font-semibold text-gray-600">
+      <span>{label}</span>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={3}
+        dir={dir}
+        className="w-full resize-y rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-blue-300 focus:outline-none"
+      />
+    </label>
   );
 }

@@ -6,6 +6,10 @@ import { isAdmin } from "./auth.ts";
 export async function listProducts(c: any) {
   try {
     const q = c.req.query();
+    const requestedLimit = Number.parseInt(q.limit || '', 10);
+    const safeLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 24)
+      : null;
     const { 
       category, featured, new: isNew, best_seller, promo, search, 
       active, homepage, new_arrivals, best_sellers, cartables, 
@@ -30,6 +34,10 @@ export async function listProducts(c: any) {
         
         if (search) {
           query = query.or(`name_fr.ilike.%${search}%,name_ar.ilike.%${search}%`);
+        }
+
+        if (safeLimit) {
+          query = query.limit(safeLimit);
         }
         
         query = query.order('sort_order', { ascending: true })
@@ -102,6 +110,10 @@ export async function listProducts(c: any) {
       (a.sort_order || 0) - (b.sort_order || 0) || 
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
+
+    if (safeLimit) {
+      products = products.slice(0, safeLimit);
+    }
     
     return respond(c, { products, total: products.length });
   } catch (e) {
