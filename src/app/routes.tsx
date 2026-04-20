@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router';
 import { Layout } from './components/layout/Layout';
 import { AdminLayout } from './components/layout/AdminLayout';
 import { HomePage } from './pages/HomePage';
+import { VirtualStore } from './pages/experience/VirtualStore';
 import { ShopPage } from './pages/ShopPage';
 import { ProductPage } from './pages/ProductPage';
 import { CartPage } from './pages/CartPage';
@@ -43,6 +44,12 @@ export const router = createBrowserRouter([
       { path: 'track/:id?', Component: TrackOrderPage },
       { path: '*', Component: NotFoundPage },
     ],
+  },
+
+  // ── 3D EXPERIENCE (fullscreen, outside Layout) ──
+  {
+    path: '/experience',
+    Component: VirtualStore,
   },
 
   // ── ADMIN (auth check inside AdminLayout) ──

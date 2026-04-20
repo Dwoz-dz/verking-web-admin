@@ -355,6 +355,21 @@ export function Navbar() {
               {link.label}
             </Link>
           ))}
+          {/* 3D Experience entry */}
+          <Link
+            to="/experience"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold transition-all duration-200 hover:scale-[1.03]"
+            style={{
+              background: 'linear-gradient(135deg,#1a1f3a,#0d1128)',
+              color: '#FFD700',
+              border: '1px solid rgba(255,215,0,0.25)',
+              boxShadow: '0 2px 12px rgba(229,37,42,0.15)',
+            }}
+            title={lang === 'ar' ? 'معرض 3D التفاعلي' : 'Showroom 3D interactif'}
+          >
+            <span className="text-base leading-none">✦</span>
+            {lang === 'ar' ? 'معرض 3D' : '3D Store'}
+          </Link>
         </nav>
 
         <div className="flex items-center gap-2">
@@ -506,6 +521,20 @@ export function Navbar() {
 
             {/* Nav links */}
             <div className="flex flex-col gap-1 border-t border-gray-100 pt-2">
+              {/* 3D Experience link */}
+              <Link
+                to="/experience"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center justify-between px-4 py-3 rounded-xl text-sm font-black transition-all"
+                style={{ background: 'linear-gradient(135deg,#1a1f3a,#0d1128)', color: '#FFD700' }}
+              >
+                <span className="flex items-center gap-2">
+                  <span>✦</span>
+                  {lang === 'ar' ? 'معرض 3D التفاعلي' : 'Showroom 3D'}
+                </span>
+                <ChevronRight size={14} className="rtl:rotate-180 opacity-60" />
+              </Link>
+
               {navLinks.map((link) => (
                 <Link
                   key={link.to}
