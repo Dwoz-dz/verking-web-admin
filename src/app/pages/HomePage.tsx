@@ -104,6 +104,22 @@ function isBannerVisibleNow(banner: BannerRecord, nowTs: number) {
   return true;
 }
 
+/**
+ * Resolve a banner's target URL based on `link_mode`:
+ *   - 'product'  -> /product/:link_target_id
+ *   - 'category' -> /shop?category=:link_target_id
+ *   - 'url' | fallback -> banner.link or banner.cta_link (raw string)
+ * Falls back to `/shop` so CTAs never dead-end.
+ */
+export function resolveBannerHref(banner: any): string {
+  const mode = typeof banner?.link_mode === 'string' ? banner.link_mode : 'url';
+  const target = typeof banner?.link_target_id === 'string' ? banner.link_target_id : '';
+  if (mode === 'product' && target) return `/product/${target}`;
+  if (mode === 'category' && target) return `/shop?category=${encodeURIComponent(target)}`;
+  const raw = (banner?.link || banner?.cta_link || '').toString().trim();
+  return raw || '/shop';
+}
+
 export function HomePage() {
   const { lang, dir } = useLang();
   const { theme } = useTheme();
@@ -386,12 +402,14 @@ export function HomePage() {
     lang,
     lang === 'ar' ? 'تسوق الآن' : 'Acheter maintenant',
   );
-  const heroLink = asText(heroSection.cta_link) || asText(heroBanner?.link) || '/shop';
+  const heroLink = heroBanner
+    ? resolveBannerHref({ ...heroBanner, link: asText(heroSection.cta_link) || asText(heroBanner?.link) })
+    : (asText(heroSection.cta_link) || '/shop');
   const heroImage =
     asText(heroSection.image) ||
     asText(heroBanner?.desktop_image) ||
     asText(heroBanner?.image) ||
-    '/verking-hero.png';
+    '/hero-marcelo.jpg';
 
   const showFeaturedSection = featuredSection.enabled !== false && theme.show_featured !== false;
   const showNewSection = newSection.enabled !== false && theme.show_new_arrivals !== false;
@@ -410,7 +428,7 @@ export function HomePage() {
   return (
     <div dir={dir} className="bg-[#FDFBF7] text-gray-900 font-sans w-full overflow-x-hidden">
       <section className="relative w-full pt-2 pb-0 px-2 md:px-4 max-w-[1400px] mx-auto">
-        <div className="relative w-full rounded-2xl md:rounded-3xl overflow-hidden min-h-[380px] md:min-h-[500px] bg-sky-100 flex flex-col justify-end shadow-xl shadow-sky-900/10 border-2 md:border-4 border-white/50">
+        <div className="relative w-full rounded-2xl md:rounded-3xl overflow-hidden min-h-[420px] md:min-h-[560px] bg-neutral-900 flex flex-col justify-end shadow-2xl shadow-black/20 border-2 md:border-4 border-white/50">
           <div className="absolute inset-0 w-full h-full">
             <img
               src={heroImage}
@@ -418,40 +436,51 @@ export function HomePage() {
                 event.currentTarget.src = 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=2022&auto=format&fit=crop';
               }}
               alt={heroTitle}
-              className="w-full h-full object-cover object-bottom"
+              className="w-full h-full object-cover object-center"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#1A3C6E]/90 via-[#1A3C6E]/30 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/20" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-transparent to-transparent rtl:from-transparent rtl:to-black/70" />
           </div>
 
-          <div className="relative z-10 p-4 md:p-10 flex flex-col items-center text-center w-full max-w-3xl mx-auto">
-            <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md border border-white/30 px-3 py-1 rounded-full mb-4 text-white shadow-lg">
-              <Star size={12} className="text-amber-400 fill-amber-400" />
-              <span className="font-bold text-[10px] md:text-xs tracking-wider">
-                {lang === 'ar' ? 'تشكيلة مدرسية متكاملة' : 'Collection scolaire complète'}
+          <div className="relative z-10 p-5 md:p-12 flex flex-col items-start text-start w-full max-w-3xl rtl:items-end rtl:text-end rtl:ml-auto">
+            <div className="inline-flex items-center gap-2 bg-[#E5252A]/95 backdrop-blur-sm border border-white/20 px-3 py-1 rounded-md mb-4 shadow-lg">
+              <span className="w-2 h-2 rounded-full bg-amber-300 animate-pulse" />
+              <span className="font-black text-[10px] md:text-[11px] tracking-[0.24em] uppercase text-white">
+                Marcelo · Collection 2026
               </span>
-              <Star size={14} className="text-amber-400 fill-amber-400" />
             </div>
 
-            <h2 className="text-white font-black text-4xl md:text-5xl lg:text-6xl leading-[1.1] mb-4 tracking-tight drop-shadow-xl" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+            <h2
+              className="text-white font-black text-3xl md:text-5xl lg:text-6xl leading-[1.05] mb-3 tracking-tight drop-shadow-2xl"
+              style={{ fontFamily: 'Montserrat, sans-serif' }}
+            >
               {heroTitle}
             </h2>
-            <p className="text-sky-50 text-sm md:text-lg font-bold mb-8 max-w-xl mx-auto leading-relaxed drop-shadow-md">
+
+            <div className="flex items-center gap-2 mb-3">
+              <span className="h-0.5 w-10 bg-amber-400 rounded-full" />
+              <span className="font-black text-[11px] md:text-xs tracking-[0.28em] uppercase text-amber-300">
+                {lang === 'ar' ? 'تشكيلة مدرسية متكاملة' : 'Collection scolaire complète'}
+              </span>
+            </div>
+
+            <p className="text-white/90 text-sm md:text-lg font-medium mb-8 max-w-xl leading-relaxed drop-shadow-md">
               {heroSubtitle}
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
               <Link
                 to={heroLink}
-                className="w-full sm:w-auto px-8 py-3 rounded-full font-black text-xs md:text-sm uppercase tracking-wider transition-all hover:scale-105 shadow-xl text-white"
-                style={{ backgroundColor: theme.primary_color }}
+                className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full font-black text-xs md:text-sm uppercase tracking-[0.18em] transition-all hover:scale-[1.03] shadow-xl text-white bg-[#E5252A] hover:bg-[#C41E23]"
               >
                 {heroCtaText}
+                <ChevronRight size={16} className="rtl:rotate-180 transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1" />
               </Link>
               <Link
                 to="/shop?promo=true"
-                className="w-full sm:w-auto bg-amber-400 text-[#1A3C6E] hover:bg-amber-500 px-8 py-3 rounded-full font-black text-xs md:text-sm uppercase tracking-wider transition-all hover:scale-105 shadow-xl shadow-amber-500/20"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full font-black text-xs md:text-sm uppercase tracking-[0.18em] transition-all hover:scale-[1.03] shadow-xl bg-amber-400 text-black hover:bg-amber-300"
               >
-                {lang === 'ar' ? 'اكتشف العروض' : 'Découvrir les offres'}
+                {lang === 'ar' ? 'اكتشف العروض' : 'Voir les promos'}
               </Link>
             </div>
           </div>
@@ -601,7 +630,7 @@ export function HomePage() {
             {promoBanners.length > 0 && (
               <div className="grid gap-4 md:grid-cols-2">
                 {promoBanners.slice(0, 2).map((banner) => (
-                  <Link key={banner.id} to={asText(banner.link) || '/shop?promo=true'} className="group relative block min-h-[180px] overflow-hidden rounded-3xl border border-red-100 shadow-sm">
+                  <Link key={banner.id} to={resolveBannerHref(banner)} className="group relative block min-h-[180px] overflow-hidden rounded-3xl border border-red-100 shadow-sm">
                     <img
                       src={asText(banner.desktop_image) || asText(banner.image) || 'https://images.unsplash.com/photo-1544816155-12df9643f363?q=80&w=800'}
                       alt={pickLocalized(banner.title_fr, banner.title_ar, lang)}

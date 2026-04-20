@@ -15,6 +15,7 @@ import { adminApi, api, API_BASE, apiHeaders } from '../../lib/api';
 import { emitCategoriesUpdated } from '../../lib/realtime';
 import { useAuth } from '../../context/AuthContext';
 import { useAdminUI } from '../../context/AdminUIContext';
+import { MediaPickerModal } from '../../components/admin/MediaPickerModal';
 import { toast } from 'sonner';
 import {
   normalizeOptionalHexColor,
@@ -830,38 +831,11 @@ export function AdminCategories() {
       )}
 
       {mediaPickerOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4">
-          <div className={`${t.card} ${t.cardBorder} w-full max-w-4xl rounded-3xl border p-4`}>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className={`text-lg font-black ${t.text}`}>Médiathèque images</h3>
-              <button
-                type="button"
-                onClick={() => setMediaPickerOpen(false)}
-                className="rounded-xl p-2 text-gray-500 hover:bg-gray-100"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="grid max-h-[70vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 lg:grid-cols-4">
-              {media.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setField('image', item.url);
-                    setMediaPickerOpen(false);
-                  }}
-                  className="overflow-hidden rounded-xl border border-gray-200 bg-white text-left hover:border-blue-300"
-                >
-                  <img src={item.url} alt={item.filename || 'media'} className="h-28 w-full object-cover" />
-                  <p className="truncate px-2 py-1 text-[11px] font-semibold text-gray-600">
-                    {item.filename || 'image'}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <MediaPickerModal
+          title="Visuel catégorie"
+          onSelect={(url) => { setField('image', url); }}
+          onClose={() => setMediaPickerOpen(false)}
+        />
       )}
 
       {previewCategory && (

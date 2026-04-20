@@ -204,7 +204,9 @@ function normalizeCategoryRecord(source: any, fallback?: Partial<CategoryRecord>
 }
 
 function splitCategory(record: CategoryRecord) {
-  const base = {
+  // Meta fields are now persisted directly on the categories table (see migration 20260419_phase3_integration.sql).
+  // We still return `meta` so the KV sidecar stays in sync for legacy readers until all code migrates off KV.
+  const base: Record<string, any> = {
     id: record.id,
     name_fr: record.name_fr,
     name_ar: record.name_ar,
@@ -212,6 +214,17 @@ function splitCategory(record: CategoryRecord) {
     image: record.image,
     sort_order: record.order,
     is_active: record.is_active,
+    show_on_homepage: record.show_on_homepage,
+    short_description_fr: record.short_description_fr,
+    short_description_ar: record.short_description_ar,
+    seo_title_fr: record.seo_title_fr,
+    seo_title_ar: record.seo_title_ar,
+    seo_description_fr: record.seo_description_fr,
+    seo_description_ar: record.seo_description_ar,
+    featured: record.featured,
+    mobile_icon: record.mobile_icon,
+    badge_color: record.badge_color,
+    card_style: record.card_style,
   };
   const meta: CategoryMetaRecord = {
     show_on_homepage: record.show_on_homepage,

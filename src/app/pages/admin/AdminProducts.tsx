@@ -20,7 +20,7 @@ import { ProductEditor } from './products/ProductEditor';
 const EMPTY_PRODUCT: Partial<Product> = {
   name_fr: '', name_ar: '', description_fr: '', description_ar: '',
   price: 0, sale_price: undefined, cost_price: undefined,
-  images: [], video_url: '', category_id: '', stock: 0, low_stock_threshold: 5,
+  images: [], video_url: '', category_id: '', level: '', stock: 0, low_stock_threshold: 5,
   sku: '', barcode: '', meta_title: '', meta_description: '',
   is_featured: false, is_new: false, is_best_seller: false, is_promo: false, is_active: true,
   show_on_homepage: false, show_in_featured: false, show_in_best_sellers: false,

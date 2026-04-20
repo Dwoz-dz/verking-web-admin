@@ -145,21 +145,33 @@ export function NewsletterWelcomeModal() {
         onClick={handleClose}
       />
 
-      <div className="relative w-full max-w-lg rounded-[2rem] bg-white p-6 sm:p-8 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
-        <button
-          onClick={handleClose}
-          className="absolute top-4 right-4 rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-          aria-label="Close"
-        >
-          <X size={18} />
-        </button>
-
-        <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl" style={{ backgroundColor: `${theme.primary_color}15` }}>
-          <Mail size={22} style={{ color: theme.primary_color }} />
+      <div className="relative w-full max-w-lg rounded-[2rem] bg-white overflow-hidden shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+        {/* Branded header strip */}
+        <div className="relative h-24 bg-gradient-to-br from-[#E5252A] via-[#C41E23] to-black overflow-hidden">
+          <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-amber-400/30 blur-2xl" />
+          <div className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full bg-white/10 blur-2xl" />
+          <div className="absolute inset-0 flex items-center px-6">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur text-white text-[10px] font-black uppercase tracking-widest">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" />
+              {lang === 'ar' ? 'نشرة VERKING' : 'Newsletter VERKING'}
+            </span>
+          </div>
+          <button
+            onClick={handleClose}
+            className="absolute top-3 right-3 rtl:right-auto rtl:left-3 rounded-full p-2 bg-white/15 text-white hover:bg-white/25 transition-colors"
+            aria-label={lang === 'ar' ? 'إغلاق' : 'Fermer'}
+          >
+            <X size={16} />
+          </button>
         </div>
 
-        <h3 className="text-2xl font-black text-gray-900 mb-2">{ui.title}</h3>
-        <p className="text-sm text-gray-500 leading-relaxed mb-6">{ui.description}</p>
+        <div className="p-6 sm:p-8">
+          <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E5252A]/10 -mt-10 border-4 border-white shadow-sm">
+            <Mail size={22} className="text-[#E5252A]" />
+          </div>
+
+          <h3 className="text-2xl font-black text-gray-900 mb-2 tracking-tight">{ui.title}</h3>
+          <p className="text-sm text-gray-500 leading-relaxed mb-6">{ui.description}</p>
 
         {subscribed ? (
           <div className="rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
@@ -174,7 +186,7 @@ export function NewsletterWelcomeModal() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={ui.placeholder}
-                className="w-full rounded-2xl border border-gray-200 py-3 pl-11 pr-4 text-sm font-medium text-gray-800 outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-blue-200"
+                className="w-full rounded-2xl border border-gray-200 py-3 pl-11 rtl:pl-4 rtl:pr-11 pr-4 text-sm font-medium text-gray-800 outline-none transition-all focus:border-[#E5252A] focus:ring-2 focus:ring-[#E5252A]/15"
                 autoComplete="email"
                 required
               />
@@ -183,14 +195,14 @@ export function NewsletterWelcomeModal() {
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white transition-all disabled:opacity-60"
-              style={{ backgroundColor: theme.primary_color }}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white bg-[#E5252A] hover:bg-[#C41E23] shadow-lg shadow-[#E5252A]/25 transition-all disabled:opacity-60"
             >
               <Send size={14} />
               {submitting ? (lang === 'ar' ? 'جاري الإرسال...' : 'Envoi...') : ui.button}
             </button>
           </form>
         )}
+        </div>
       </div>
     </div>
   );

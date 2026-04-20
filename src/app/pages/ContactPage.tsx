@@ -39,16 +39,18 @@ export function ContactPage() {
   return (
     <div dir={dir} style={{ backgroundColor: theme.bg_color }} className="min-h-screen">
       {/* ── HEADER ── */}
-      <div className="relative overflow-hidden py-20 px-4" style={{ background: `linear-gradient(135deg, ${theme.primary_color}, ${theme.primary_color}cc)` }}>
-        <div className="absolute inset-0 opacity-10 pointer-events-none">
+      <div className="relative overflow-hidden py-20 px-4 bg-gradient-to-br from-black via-neutral-900 to-[#1a0808]">
+        <div className="absolute inset-0 opacity-20 pointer-events-none">
            <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-             <path d="M0 0 L 100 100 M 100 0 L 0 100" stroke="white" strokeWidth="0.5" />
+             <path d="M0 0 L 100 100 M 100 0 L 0 100" stroke="#E5252A" strokeWidth="0.5" />
            </svg>
         </div>
+        <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-[#E5252A]/20 blur-3xl" />
+        <div className="absolute -bottom-20 -left-20 w-80 h-80 rounded-full bg-amber-400/10 blur-3xl" />
         <div className="container mx-auto text-center text-white relative z-10">
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
-             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-white/10 text-[10px] font-black uppercase tracking-[0.2em] mb-6 backdrop-blur-md border border-white/10">
-                <Headphones size={14} /> Support & Assistance
+             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#E5252A] text-[10px] font-black uppercase tracking-[0.2em] mb-6 shadow-lg shadow-[#E5252A]/30">
+                <Headphones size={14} /> {lang === 'ar' ? 'الدعم والمساعدة' : 'Support & Assistance'}
              </div>
           </motion.div>
           <motion.h1 
@@ -70,10 +72,10 @@ export function ContactPage() {
         {/* ── INFO CARDS ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
           {[
-            { icon: MapPin, label: tr('our_address', lang), value: c.address, color: '#1A3C6E', href: `https://maps.google.com/?q=${encodeURIComponent(c.address)}` },
-            { icon: Phone, label: lang === 'ar' ? 'الهاتف' : 'Téléphone', value: c.phone, color: '#F57C00', href: `tel:${c.phone}`, dir: 'ltr' },
-            { icon: Mail, label: 'Email Support', value: c.email, color: '#16a34a', href: `mailto:${c.email}` },
-            { icon: Clock, label: tr('working_hours', lang), value: c.working_hours, color: '#9333ea' },
+            { icon: MapPin, label: tr('our_address', lang), value: c.address, color: '#E5252A', href: `https://maps.google.com/?q=${encodeURIComponent(c.address)}` },
+            { icon: Phone, label: lang === 'ar' ? 'الهاتف' : 'Téléphone', value: c.phone, color: '#F59E0B', href: `tel:${c.phone}`, dir: 'ltr' },
+            { icon: Mail, label: lang === 'ar' ? 'البريد الإلكتروني' : 'Email Support', value: c.email, color: '#111', href: `mailto:${c.email}` },
+            { icon: Clock, label: tr('working_hours', lang), value: c.working_hours, color: '#E5252A' },
           ].map((item, i) => (
             <motion.div 
                key={i}
@@ -86,7 +88,7 @@ export function ContactPage() {
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">{item.label}</p>
               {item.href ? (
                 <a href={item.href} target={i === 0 ? '_blank' : '_self'} rel="noreferrer"
-                  className="text-sm text-gray-800 font-black hover:text-[#1A3C6E] transition-colors flex items-start gap-1" dir={item.dir}>
+                  className="text-sm text-gray-800 font-black hover:text-[#E5252A] transition-colors flex items-start gap-1" dir={item.dir}>
                   {item.value}
                   {i === 0 && <ExternalLink size={12} className="mt-1 shrink-0 opacity-40" />}
                 </a>
@@ -104,15 +106,17 @@ export function ContactPage() {
               <div className="bg-white rounded-[3rem] overflow-hidden shadow-2xl border border-gray-100 flex flex-col h-full">
                 <div className="p-8 border-b border-gray-50 flex items-center justify-between">
                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center">
-                         <MapPin size={18} className="text-[#1A3C6E]" />
+                      <div className="w-10 h-10 rounded-xl bg-[#E5252A]/10 flex items-center justify-center">
+                         <MapPin size={18} className="text-[#E5252A]" />
                       </div>
-                      <h2 className="text-xl font-black text-gray-800 tracking-tight">Showroom & Bureau</h2>
+                      <h2 className="text-xl font-black text-gray-800 tracking-tight">
+                        {lang === 'ar' ? 'صالة العرض والمكتب' : 'Showroom & Bureau'}
+                      </h2>
                    </div>
                    <a
                     href={`https://maps.google.com/?q=${encodeURIComponent(c.address)}`}
                     target="_blank" rel="noreferrer"
-                    className="text-[10px] font-black uppercase tracking-widest text-[#1A3C6E] hover:underline flex items-center gap-2"
+                    className="text-[10px] font-black uppercase tracking-widest text-[#E5252A] hover:underline flex items-center gap-2"
                   >
                     Google Maps <ChevronRight size={14} />
                   </a>
@@ -145,7 +149,7 @@ export function ContactPage() {
                     { icon: MessageCircle, name: 'WhatsApp', handle: 'Support Direct', href: `https://wa.me/${c.whatsapp}`, color: '#25d366' },
                   ].map(social => (
                     <a key={social.name} href={social.href} target="_blank" rel="noreferrer"
-                      className="group flex items-center gap-4 p-4 rounded-3xl bg-gray-50 hover:bg-[#1A3C6E] transition-all">
+                      className="group flex items-center gap-4 p-4 rounded-3xl bg-gray-50 hover:bg-[#E5252A] transition-all">
                       <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg" style={{ backgroundColor: social.color }}>
                         <social.icon size={20} />
                       </div>
@@ -162,8 +166,9 @@ export function ContactPage() {
 
             {/* Direct Connect */}
             <FadeIn delay={0.3}>
-              <div className="bg-[#1A3C6E] rounded-[3rem] p-10 text-white shadow-2xl shadow-blue-900/20 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+              <div className="bg-gradient-to-br from-black via-neutral-900 to-[#1a0808] rounded-[3rem] p-10 text-white shadow-2xl shadow-black/30 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-40 h-40 bg-[#E5252A]/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                <div className="absolute bottom-0 left-0 w-32 h-32 bg-amber-400/15 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
                 <h3 className="font-black text-xs uppercase tracking-[0.2em] opacity-60 mb-6">{lang === 'ar' ? 'تواصل فوري' : 'Contact Direct'}</h3>
                 <p className="text-lg font-black leading-tight mb-8">
                   {lang === 'ar' ? 'هل لديك طلب خاص أو استفسار عاجل؟' : 'Une demande urgente ou un devis spécial ?'}

@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ShoppingCart, Menu, X, Globe, Search, Shield, ChevronRight } from 'lucide-react';
 import { useLang } from '../../context/LanguageContext';
@@ -11,6 +11,7 @@ import {
   CATEGORIES_UPDATED_KEY,
   CONTENT_UPDATED_KEY,
 } from '../../lib/realtime';
+import { openCartDrawer } from '../CartDrawer';
 
 type CategoryItem = {
   id: string;
@@ -189,11 +190,11 @@ export function Navbar() {
   };
 
   const searchLabels = {
-    trending: lang === 'ar' ? 'Ø¹Ù…Ù„ÙŠØ§Øª Ø¨Ø­Ø« Ø±Ø§Ø¦Ø¬Ø©' : 'Recherches tendance',
-    categories: lang === 'ar' ? 'ÙØ¦Ø§Øª Ù…Ø´Ù‡ÙˆØ±Ø©' : 'Categories populaires',
-    suggestions: lang === 'ar' ? 'Ø§Ù‚ØªØ±Ø§Ø­Ø§Øª Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª' : 'Suggestions produits',
-    noResults: lang === 'ar' ? 'Ù„Ø§ ØªÙˆØ¬Ø¯ Ù†ØªØ§Ø¦Ø¬ Ø­Ø§Ù„ÙŠØ§' : 'Aucun produit trouve',
-    searchPlaceholder: lang === 'ar' ? 'Ø§Ø¨Ø­Ø« Ø¹Ù† Ù…Ù†ØªØ¬ Ø£Ùˆ ÙØ¦Ø©...' : 'Rechercher un produit ou une categorie...',
+    trending: lang === 'ar' ? 'عمليات بحث رائجة' : 'Recherches tendance',
+    categories: lang === 'ar' ? 'فئات مشهورة' : 'Catégories populaires',
+    suggestions: lang === 'ar' ? 'اقتراحات المنتجات' : 'Suggestions produits',
+    noResults: lang === 'ar' ? 'لا توجد نتائج حاليا' : 'Aucun produit trouvé',
+    searchPlaceholder: lang === 'ar' ? 'ابحث عن منتج أو فئة...' : 'Rechercher un produit ou une catégorie...',
   };
 
   const renderSearchContent = (isMobile: boolean) => (
@@ -272,7 +273,7 @@ export function Navbar() {
 
             {searching && (
               <p className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500">
-                {lang === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø¨Ø­Ø«...' : 'Recherche...'}
+                {lang === 'ar' ? 'جاري البحث...' : 'Recherche...'}
               </p>
             )}
 
@@ -363,7 +364,7 @@ export function Navbar() {
             aria-label="Switch language"
           >
             <Globe size={15} />
-            <span>{lang === 'fr' ? 'Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©' : 'FR'}</span>
+            <span>{lang === 'fr' ? 'العربية' : 'FR'}</span>
           </button>
 
           <div className="relative hidden sm:block" ref={desktopSearchRef}>
@@ -400,7 +401,17 @@ export function Navbar() {
             <Search size={16} />
           </button>
 
-          <Link to="/cart" className="relative flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm transition-all" style={{ backgroundColor: `${theme.accent_color}15`, color: theme.accent_color }}>
+          <button
+            type="button"
+            onClick={(e) => {
+              // Ctrl/Cmd/middle click → navigate to /cart page (fallback)
+              if (e.ctrlKey || e.metaKey) { navigate('/cart'); return; }
+              openCartDrawer();
+            }}
+            aria-label={lang === 'ar' ? 'فتح السلة' : 'Ouvrir le panier'}
+            className="relative flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm transition-all hover:opacity-90"
+            style={{ backgroundColor: `${theme.accent_color}15`, color: theme.accent_color }}
+          >
             <ShoppingCart size={18} />
             <span className="hidden sm:inline">{tr('cart', lang)}</span>
             {count > 0 && (
@@ -408,7 +419,7 @@ export function Navbar() {
                 {count > 9 ? '9+' : count}
               </span>
             )}
-          </Link>
+          </button>
 
           <Link
             to="/admin"
@@ -437,21 +448,35 @@ export function Navbar() {
       </div>
 
       {menuOpen && (
-        <div className="lg:hidden bg-white border-t border-gray-100 shadow-lg">
-          <nav className="container mx-auto px-4 py-3 flex flex-col gap-1">
-            <div className="mb-3">
+        <div className="lg:hidden bg-white border-t border-gray-100 shadow-2xl animate-[slideDown_.22s_ease-out]">
+          <nav className="container mx-auto px-4 py-4 flex flex-col gap-2">
+            {/* Top row: language + cart shortcut */}
+            <div className="grid grid-cols-2 gap-2 mb-2">
               <button
                 onClick={() => setLang(lang === 'fr' ? 'ar' : 'fr')}
-                className="w-full flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700"
+                className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs font-black uppercase tracking-wide text-gray-800 hover:border-[#E5252A] hover:text-[#E5252A] transition-colors"
               >
-                <Globe size={15} />
-                <span>{lang === 'fr' ? 'Switch to Arabic' : 'Passer en Francais'}</span>
+                <Globe size={14} />
+                <span>{lang === 'fr' ? 'العربية' : 'Français'}</span>
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); openCartDrawer(); }}
+                className="relative flex items-center justify-center gap-2 rounded-xl bg-[#E5252A] text-white px-3 py-2.5 text-xs font-black uppercase tracking-wide shadow-md shadow-[#E5252A]/20"
+              >
+                <ShoppingCart size={14} />
+                <span>{tr('cart', lang)}</span>
+                {count > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 bg-amber-400 text-black text-[10px] rounded-full flex items-center justify-center font-black">
+                    {count > 9 ? '9+' : count}
+                  </span>
+                )}
               </button>
             </div>
 
-            <div className="sm:hidden mb-3 space-y-3">
+            {/* Mobile search */}
+            <div className="sm:hidden mb-2 space-y-2">
               <div className="relative">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search size={15} className="absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   ref={mobileSearchInputRef}
                   value={searchValue}
@@ -464,10 +489,11 @@ export function Navbar() {
                     if (event.key === 'Enter') {
                       event.preventDefault();
                       submitSearch(searchValue);
+                      setMenuOpen(false);
                     }
                   }}
                   placeholder={searchLabels.searchPlaceholder}
-                  className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm font-medium text-gray-700 outline-none transition-all focus:border-blue-200 focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3 pl-9 pr-3 rtl:pl-3 rtl:pr-9 text-sm font-medium text-gray-700 outline-none transition-all focus:border-[#E5252A] focus:ring-2 focus:ring-[#E5252A]/20 focus:bg-white"
                 />
               </div>
 
@@ -478,25 +504,31 @@ export function Navbar() {
               )}
             </div>
 
-            {navLinks.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                className={`px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                  isActive(link.to) ? 'text-white' : 'text-gray-700 hover:bg-gray-50'
-                }`}
-                style={isActive(link.to) ? { backgroundColor: theme.primary_color } : {}}
-              >
-                {link.label}
-              </Link>
-            ))}
+            {/* Nav links */}
+            <div className="flex flex-col gap-1 border-t border-gray-100 pt-2">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  onClick={() => setMenuOpen(false)}
+                  className={`flex items-center justify-between px-4 py-3 rounded-xl text-sm font-bold transition-all ${
+                    isActive(link.to)
+                      ? 'bg-[#E5252A] text-white shadow-md shadow-[#E5252A]/15'
+                      : 'text-gray-800 hover:bg-gray-50 hover:text-[#E5252A]'
+                  }`}
+                >
+                  <span>{link.label}</span>
+                  <ChevronRight size={14} className="rtl:rotate-180 opacity-60" />
+                </Link>
+              ))}
+            </div>
 
             <Link
               to="/admin"
-              className="px-4 py-3 rounded-lg text-sm font-bold text-white flex items-center gap-2 mt-1"
-              style={{ backgroundColor: theme.primary_color }}
+              onClick={() => setMenuOpen(false)}
+              className="mt-2 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-black uppercase tracking-wide text-white bg-black hover:bg-gray-800 transition-colors"
             >
-              <Shield size={16} />
+              <Shield size={15} />
               Admin
             </Link>
           </nav>

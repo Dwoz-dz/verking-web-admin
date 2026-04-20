@@ -491,6 +491,7 @@ export function AdminHomepage() {
 
   const resetExpandedSection = () => {
     if (!expandedKey) return;
+    if (!window.confirm(`Réinitialiser la section "${SECTION_META[expandedKey].labelFr}" ? Les modifications non publiées seront perdues.`)) return;
     setDraftConfig((prev) => ({
       ...prev,
       [expandedKey]: normalizeSection(remoteConfig[expandedKey], DEFAULT_CONFIG[expandedKey]),
@@ -499,6 +500,7 @@ export function AdminHomepage() {
   };
 
   const clearSyncState = () => {
+    if (!window.confirm('Supprimer le brouillon local et restaurer la version publiée ? Cette action est irréversible.')) return;
     localStorage.removeItem(DRAFT_KEY);
     localStorage.removeItem(SYNC_KEY);
     setLastDraftAt(null);
@@ -561,8 +563,19 @@ export function AdminHomepage() {
     );
   }
 
+  const hasDraftAhead = !!(lastDraftAt && (!lastPublishedAt || lastDraftAt > lastPublishedAt));
+
   return (
     <div className="space-y-6">
+      {hasDraftAhead && (
+        <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span className="shrink-0 text-lg">⚠️</span>
+          <span className="font-semibold">Brouillon local non publié — les modifications ne sont pas encore visibles sur le site.</span>
+          <button type="button" onClick={publish} disabled={publishing} className="ml-auto shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-black text-white hover:bg-amber-700 disabled:opacity-60">
+            Publier maintenant
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className={`text-3xl font-black ${t.text}`}>Page d’accueil</h1>

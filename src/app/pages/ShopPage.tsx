@@ -30,6 +30,33 @@ export function ShopPage() {
     searchParams.get('best_seller') === 'true' ||
     searchParams.get('bestseller') === 'true';
   const promoParam = searchParams.get('promo') === 'true';
+  const levelParam = searchParams.get('level') || '';
+
+  const SCHOOL_LEVELS: { id: string; fr: string; ar: string; emoji: string }[] = [
+    { id: 'primaire',   fr: 'Primaire',    ar: 'ابتدائي', emoji: '🎒' },
+    { id: 'moyen',      fr: 'Moyen',       ar: 'متوسط',   emoji: '📚' },
+    { id: 'secondaire', fr: 'Secondaire',  ar: 'ثانوي',   emoji: '🎓' },
+    { id: 'universite', fr: 'Université',  ar: 'جامعة',   emoji: '🏛️' },
+  ];
+
+  const matchesLevel = (p: any, level: string) => {
+    if (!level) return true;
+    const direct = (p.level || p.school_level || '').toString().toLowerCase();
+    if (direct === level) return true;
+    const tags: string[] = Array.isArray(p.tags) ? p.tags.map((t: any) => String(t).toLowerCase()) : [];
+    if (tags.includes(level)) return true;
+    const cat = categories.find(c => c.id === p.category_id);
+    const catNames = [cat?.name_fr, cat?.name_ar, cat?.slug, (cat as any)?.level]
+      .filter(Boolean).map((v: any) => String(v).toLowerCase());
+    const map: Record<string, string[]> = {
+      primaire:   ['primaire', 'ابتدائي', 'ابتدائية', 'primary'],
+      moyen:      ['moyen', 'collège', 'college', 'متوسط', 'متوسطة', 'middle'],
+      secondaire: ['secondaire', 'lycée', 'lycee', 'ثانوي', 'ثانوية', 'high'],
+      universite: ['universite', 'université', 'جامعة', 'جامعي', 'university'],
+    };
+    const keys = map[level] || [];
+    return catNames.some(n => keys.some(k => n.includes(k)));
+  };
   
   const [sortBy, setSortBy] = useState('new');
   const [priceRange, setPriceRange] = useState<number>(15000); // Max default
@@ -78,7 +105,8 @@ export function ShopPage() {
     if (newParam) res = res.filter(p => p.is_new || p.show_in_new_arrivals);
     if (bestParam) res = res.filter(p => p.is_best_seller || p.show_in_best_sellers);
     if (promoParam) res = res.filter(p => p.show_in_promotions || (p.sale_price && p.sale_price < p.price));
-    
+    if (levelParam) res = res.filter(p => matchesLevel(p, levelParam));
+
     if (search) {
       const s = search.toLowerCase();
       res = res.filter(p => 
@@ -96,7 +124,7 @@ export function ShopPage() {
     else res.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
     
     return res;
-  }, [products, catParam, featuredParam, newParam, bestParam, promoParam, search, sortBy, priceRange, lang]);
+  }, [products, categories, catParam, featuredParam, newParam, bestParam, promoParam, levelParam, search, sortBy, priceRange, lang]);
 
   const toggleFilter = (key: string) => {
     setSearchParams(prev => {
@@ -131,7 +159,7 @@ export function ShopPage() {
            <Filter size={18} />
            {tr('filter', lang)}
         </div>
-        {(catParam || featuredParam || newParam || bestParam || promoParam || search || priceRange < 20000) && (
+        {(catParam || featuredParam || newParam || bestParam || promoParam || levelParam || search || priceRange < 20000) && (
           <button onClick={clearFilters} className="text-xs font-bold text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all">
             {lang === 'ar' ? 'مسح الكل' : 'Effacer'}
           </button>
@@ -222,32 +250,56 @@ export function ShopPage() {
 
   return (
     <div dir={dir} className="bg-[#F8FAFC] min-h-screen pb-20">
-      {/* ── HEADER BREADCRUMB ── */}
-      <section className="bg-white border-b border-gray-100 py-10 pt-28">
-        <div className="container mx-auto px-6">
-           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div>
-                <nav className="flex items-center gap-2 text-xs text-gray-400 mb-4 font-bold uppercase tracking-wider">
-                  <Link to="/" className="hover:text-blue-700 transition-colors uppercase">{tr('home', lang)}</Link>
-                  <ChevronDown size={12} className="-rotate-90 rtl:rotate-90" />
-                  <span className="text-gray-900">{tr('shop', lang)}</span>
-                </nav>
-                <h1 className="text-4xl sm:text-5xl font-black text-gray-900" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                  {tr('all_products', lang)}
-                </h1>
-                <p className="text-gray-500 mt-2 font-medium">
-                  {filtered.length} {lang === 'ar' ? 'منتوج متوفر حالياً' : 'produits disponibles'}
-                </p>
+      {/* ── HEADER ── */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-black via-neutral-900 to-[#1a0808] pt-28 pb-12">
+        {/* Decorative blobs */}
+        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-[#E5252A]/20 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-16 -left-16 w-64 h-64 rounded-full bg-amber-400/10 blur-3xl pointer-events-none" />
+        <div className="absolute inset-0 opacity-10 pointer-events-none">
+          <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <path d="M0 0 L100 100 M100 0 L0 100" stroke="#E5252A" strokeWidth="0.3" />
+          </svg>
+        </div>
+
+        <div className="container mx-auto px-6 relative z-10">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div>
+              {/* Breadcrumb */}
+              <nav className="flex items-center gap-2 text-[10px] text-white/50 mb-4 font-bold uppercase tracking-widest">
+                <Link to="/" className="hover:text-white transition-colors">{tr('home', lang)}</Link>
+                <ChevronDown size={10} className="-rotate-90 rtl:rotate-90" />
+                <span className="text-white/80">{tr('shop', lang)}</span>
+              </nav>
+              {/* Badge */}
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#E5252A] text-[10px] font-black uppercase tracking-[0.18em] text-white mb-4 shadow-lg shadow-[#E5252A]/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" />
+                {lang === 'ar' ? 'متجرنا الكامل' : 'Notre boutique complète'}
               </div>
-              <div className="flex items-center gap-4 bg-gray-50 p-2 rounded-2xl border border-gray-100">
-                 <button onClick={() => setViewMode('grid')} className={`p-3 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-white shadow-md text-blue-700' : 'text-gray-400'}`}>
-                    <LayoutGrid size={20} />
-                 </button>
-                 <button onClick={() => setViewMode('list')} className={`p-3 rounded-xl transition-all ${viewMode === 'list' ? 'bg-white shadow-md text-blue-700' : 'text-gray-400'}`}>
-                    <List size={20} />
-                 </button>
-              </div>
-           </div>
+              <h1 className="text-4xl sm:text-5xl font-black text-white tracking-tight">
+                {tr('all_products', lang)}
+              </h1>
+              <p className="text-white/60 mt-2 font-medium text-sm">
+                <span className="font-black text-amber-400">{filtered.length}</span>{' '}
+                {lang === 'ar' ? 'منتوج متوفر حالياً' : 'produits disponibles'}
+              </p>
+            </div>
+
+            {/* View toggle */}
+            <div className="flex items-center gap-2 bg-white/10 backdrop-blur p-1.5 rounded-2xl border border-white/10 shrink-0">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-[#E5252A] text-white shadow' : 'text-white/50 hover:text-white'}`}
+              >
+                <LayoutGrid size={18} />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2.5 rounded-xl transition-all ${viewMode === 'list' ? 'bg-[#E5252A] text-white shadow' : 'text-white/50 hover:text-white'}`}
+              >
+                <List size={18} />
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -263,6 +315,45 @@ export function ShopPage() {
 
           {/* ── MAIN PRODUCT GRID ── */}
           <main className="flex-1">
+            {/* School-level chip bar */}
+            <div className="mb-5 -mx-1 overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-2 px-1 min-w-max">
+                <button
+                  onClick={() => setSearchParams(prev => { const np = new URLSearchParams(prev); np.delete('level'); return np; })}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs md:text-sm font-black uppercase tracking-wide border transition-all shrink-0 ${
+                    !levelParam
+                      ? 'bg-black text-white border-black shadow-md'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-black hover:text-black'
+                  }`}
+                >
+                  <span>✨</span>
+                  {lang === 'ar' ? 'كل المستويات' : 'Tous niveaux'}
+                </button>
+                {SCHOOL_LEVELS.map(lvl => {
+                  const active = levelParam === lvl.id;
+                  return (
+                    <button
+                      key={lvl.id}
+                      onClick={() => setSearchParams(prev => {
+                        const np = new URLSearchParams(prev);
+                        if (active) np.delete('level');
+                        else np.set('level', lvl.id);
+                        return np;
+                      })}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs md:text-sm font-black uppercase tracking-wide border transition-all shrink-0 ${
+                        active
+                          ? 'bg-[#E5252A] text-white border-[#E5252A] shadow-md scale-105'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-[#E5252A] hover:text-[#E5252A]'
+                      }`}
+                    >
+                      <span className="text-sm">{lvl.emoji}</span>
+                      {lang === 'ar' ? lvl.ar : lvl.fr}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Toolbar */}
             <div className="flex items-center justify-between mb-4 gap-4">
                <div className="flex items-center gap-3 flex-1">
@@ -295,7 +386,7 @@ export function ShopPage() {
             </div>
 
             {/* Active filter chips */}
-            {(catParam || featuredParam || newParam || bestParam || promoParam || search || priceRange < 20000) && (
+            {(catParam || featuredParam || newParam || bestParam || promoParam || levelParam || search || priceRange < 20000) && (
               <div className="flex items-center gap-2 flex-wrap mb-6 pb-4 border-b border-gray-100">
                 <Tag size={13} className="text-gray-400 shrink-0" />
                 <span className="text-xs font-bold text-gray-400 shrink-0">
@@ -332,6 +423,15 @@ export function ShopPage() {
                     {lang === 'ar' ? 'تخفيضات' : 'Promos'} <X size={10} />
                   </button>
                 )}
+                {levelParam && (() => {
+                  const lvl = SCHOOL_LEVELS.find(l => l.id === levelParam);
+                  return (
+                    <button onClick={() => setSearchParams(prev => { const np = new URLSearchParams(prev); np.delete('level'); return np; })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#E5252A]/10 text-[#E5252A] rounded-xl text-xs font-bold hover:bg-[#E5252A]/20 transition-colors">
+                      {lvl ? (lang === 'ar' ? lvl.ar : lvl.fr) : levelParam} <X size={10} />
+                    </button>
+                  );
+                })()}
                 {priceRange < 20000 && (
                   <button onClick={() => setPriceRange(20000)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 transition-colors">

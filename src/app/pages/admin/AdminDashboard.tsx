@@ -7,6 +7,7 @@ import {
   PieChart, Search, ChevronRight, Inbox
 } from 'lucide-react';
 import { adminApi, ORDER_STATUSES } from '../../lib/api';
+import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { useAdminUI } from '../../context/AdminUIContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -127,7 +128,7 @@ export function AdminDashboard() {
 
   useEffect(() => {
     if (!token) return;
-    adminApi.get('/stats', token).then(setStats).catch(console.error).finally(() => setLoading(false));
+    adminApi.get('/stats', token).then(setStats).catch(() => toast.error('Impossible de charger les statistiques.')).finally(() => setLoading(false));
   }, [token]);
 
   // Derived Business Intelligence

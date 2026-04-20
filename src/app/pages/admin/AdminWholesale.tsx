@@ -88,15 +88,20 @@ export function AdminWholesale() {
 
   const updateStatus = async (id: string, status: string) => {
     if (!token) return;
+    const prevSelected = selected;
+    const prevStatus = selected?.status;
     setUpdatingStatus(true);
+    setSelected((p) => p ? { ...p, status: status as WholesaleRequest['status'] } : null);
+    setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: status as WholesaleRequest['status'] } : r));
     try {
       await adminApi.put(`/wholesale/${id}`, { status }, token);
       const label = STATUSES.find(s => s.value === status)?.label;
       toast.success(`Statut → ${label}`);
-      if (selected) setSelected((p: WholesaleRequest | null) => p ? ({ ...p, status: status as WholesaleRequest['status'] }) : null);
-      load(true);
-    } catch (e) { toast.error(`Erreur: ${e}`); }
-    finally { setUpdatingStatus(false); }
+    } catch (e) {
+      setSelected(prevSelected);
+      if (prevStatus) setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: prevStatus } : r));
+      toast.error(`Erreur: ${e}`);
+    } finally { setUpdatingStatus(false); }
   };
 
   const saveNote = async () => {

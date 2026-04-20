@@ -1,4 +1,4 @@
-﻿import * as kv from "./kv_store.tsx";
+import * as kv from "./kv_store.tsx";
 import { db, useDB, respond, errRes, uid } from "./db.ts";
 import { isAdmin } from "./auth.ts";
 
@@ -318,11 +318,20 @@ const THEME_LAYOUT_STYLES = ["classic", "minimal", "bold", "immersive"] as const
 
 const DB_THEME_FIELDS = [
   "primary_color",
+  "secondary_color",
   "accent_color",
   "bg_color",
+  "card_color",
+  "border_color",
   "font_heading",
   "font_body",
+  "type_scale",
   "button_radius",
+  "button_shadow",
+  "component_density",
+  "header_style",
+  "footer_style",
+  "homepage_style",
   "show_featured",
   "show_new_arrivals",
   "show_best_sellers",

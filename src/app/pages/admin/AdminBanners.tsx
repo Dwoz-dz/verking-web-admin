@@ -16,6 +16,7 @@ import {
 import { adminApi, api, API_BASE, apiHeaders } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useAdminUI } from '../../context/AdminUIContext';
+import { MediaPickerModal } from '../../components/admin/MediaPickerModal';
 import { toast } from 'sonner';
 import {
   normalizeOrder,
@@ -419,11 +420,13 @@ export function AdminBanners() {
 
   const toggleActive = async (item: Banner) => {
     if (!token) return;
+    const next = !item.is_active;
+    setBanners((prev) => prev.map((b) => b.id === item.id ? { ...b, is_active: next } : b));
     try {
-      await adminApi.put(`/banners/${item.id}`, { is_active: !item.is_active }, token);
-      await loadBanners();
+      await adminApi.put(`/banners/${item.id}`, { is_active: next }, token);
     } catch (error) {
       console.error(error);
+      setBanners((prev) => prev.map((b) => b.id === item.id ? { ...b, is_active: item.is_active } : b));
       toast.error('Impossible de changer le statut.');
     }
   };
@@ -806,6 +809,7 @@ export function AdminBanners() {
                   onChange={(value) => {
                     setField('desktop_image', value);
                     setField('image', value);
+                    if (!normalizeSafeText(form.mobile_image, '')) setField('mobile_image', value);
                   }}
                   onUpload={() => desktopFileRef.current?.click()}
                   onMediaPick={() => setMediaPickerTarget('desktop_image')}
@@ -885,43 +889,18 @@ export function AdminBanners() {
       )}
 
       {mediaPickerTarget && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4">
-          <div className={`${t.card} ${t.cardBorder} w-full max-w-4xl rounded-3xl border p-4`}>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className={`text-lg font-black ${t.text}`}>Médiathèque images</h3>
-              <button
-                type="button"
-                onClick={() => setMediaPickerTarget(null)}
-                className="rounded-xl p-2 text-gray-500 hover:bg-gray-100"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="grid max-h-[70vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 lg:grid-cols-4">
-              {media.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    if (mediaPickerTarget === 'desktop_image') {
-                      setField('desktop_image', item.url);
-                      setField('image', item.url);
-                    } else {
-                      setField('mobile_image', item.url);
-                    }
-                    setMediaPickerTarget(null);
-                  }}
-                  className="overflow-hidden rounded-xl border border-gray-200 bg-white text-left hover:border-blue-300"
-                >
-                  <img src={item.url} alt={item.filename || 'media'} className="h-28 w-full object-cover" />
-                  <p className="truncate px-2 py-1 text-[11px] font-semibold text-gray-600">
-                    {item.filename || 'image'}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <MediaPickerModal
+          title={mediaPickerTarget === 'desktop_image' ? 'Image desktop' : 'Image mobile'}
+          onSelect={(url) => {
+            if (mediaPickerTarget === 'desktop_image') {
+              setField('desktop_image', url);
+              setField('image', url);
+            } else {
+              setField('mobile_image', url);
+            }
+          }}
+          onClose={() => setMediaPickerTarget(null)}
+        />
       )}
 
       {preview && (

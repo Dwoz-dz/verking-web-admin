@@ -29,6 +29,7 @@ export function ProductPage() {
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
+    if (!id) return;
     setLoading(true);
     setQty(1);
     setImgIdx(0);
@@ -40,6 +41,12 @@ export function ProductPage() {
           .filter((p: any) => p.category_id === d.product?.category_id && p.id !== id)
           .slice(0, 4)
       );
+      // Increment view count once per session per product (no auth required).
+      const viewedKey = `vk_viewed_${id}`;
+      if (!sessionStorage.getItem(viewedKey)) {
+        sessionStorage.setItem(viewedKey, '1');
+        api.post(`/products/${id}/view`, {}).catch(() => {});
+      }
     }).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
 

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Save, Plus, Trash2, HelpCircle, Phone, Info, BookOpen, Star, Eye,
   EyeOff, ArrowUp, ArrowDown, MessageSquare, MapPin, Clock, Mail, Instagram,
@@ -992,6 +992,7 @@ export function AdminContent() {
         setContent(normalizeContentPayload(loaded));
         setIsDirty(false);
       })
+      .catch(() => toast.error('Impossible de charger le contenu.'))
       .finally(() => setLoading(false));
   }, []);
 

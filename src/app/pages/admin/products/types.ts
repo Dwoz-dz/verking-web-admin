@@ -11,7 +11,8 @@ export interface Product {
   images: string[]; 
   video_url?: string; 
   category_id: string;
-  stock: number; 
+  level?: 'primaire' | 'moyen' | 'secondaire' | 'universite' | '' | null;
+  stock: number;
   low_stock_threshold?: number;
   sku?: string; 
   barcode?: string; 
@@ -66,10 +67,11 @@ export const EMPTY_PRODUCT: Partial<Product> = {
   price: 0, 
   sale_price: undefined, 
   cost_price: undefined,
-  images: [], 
-  video_url: '', 
-  category_id: '', 
-  stock: 0, 
+  images: [],
+  video_url: '',
+  category_id: '',
+  level: '',
+  stock: 0,
   low_stock_threshold: 5,
   sku: '', 
   barcode: '', 

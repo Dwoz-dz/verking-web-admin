@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 import { AnimatedBackground } from '../AnimatedBackground';
 import { NewsletterWelcomeModal } from './NewsletterWelcomeModal';
 import { AnnouncementBar } from './AnnouncementBar';
+import { CartDrawer } from '../CartDrawer';
 
 export function Layout() {
   return (
@@ -31,6 +32,7 @@ export function Layout() {
 
       <Toaster position="top-center" richColors />
       <NewsletterWelcomeModal />
+      <CartDrawer />
 
       {/* Floating WhatsApp Button */}
       <a

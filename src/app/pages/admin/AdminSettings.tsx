@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Save, Lock, Eye, EyeOff, Info, Store, Phone, Mail, MapPin, Globe, CreditCard, Truck, ShieldCheck, LayoutPanelLeft, Zap } from 'lucide-react';
+import { Save, Lock, Eye, EyeOff, Info, Store, Phone, Mail, MapPin, Globe, CreditCard, Truck, ShieldCheck, LayoutPanelLeft, Zap, X } from 'lucide-react';
 import { adminApi, API_BASE, apiHeaders } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useAdminUI } from '../../context/AdminUIContext';
@@ -85,7 +85,7 @@ export function AdminSettings() {
       });
       toast.success('Configuration sauvegardée');
     } catch (e) { toast.error(`Erreur: ${e}`); }
-    finally { setSavingStore(true); setTimeout(() => setSavingStore(false), 2000); }
+    finally { setSavingStore(false); }
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {

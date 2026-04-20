@@ -95,6 +95,7 @@ export function AdminOrders() {
   const [savingNote, setSavingNote] = useState(false);
   const [showNoteInput, setShowNoteInput] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+  const [dateFilter, setDateFilter] = useState('');
 
   const load = async (silent = false) => {
     if (!token) return;
@@ -119,6 +120,22 @@ export function AdminOrders() {
 
   const filtered = useMemo(() => orders.filter(o => {
     if (filterStatus && o.status !== filterStatus) return false;
+    if (dateFilter) {
+      const created = new Date(o.created_at).getTime();
+      const now = Date.now();
+      const day = 86400000;
+      if (dateFilter === 'today') {
+        const start = new Date(); start.setHours(0, 0, 0, 0);
+        if (created < start.getTime()) return false;
+      } else if (dateFilter === 'yesterday') {
+        const start = new Date(); start.setHours(0, 0, 0, 0);
+        const end = start.getTime();
+        start.setDate(start.getDate() - 1);
+        if (created < start.getTime() || created >= end) return false;
+      } else if (dateFilter === '7days') {
+        if (created < now - 7 * day) return false;
+      }
+    }
     if (search) {
       const s = search.toLowerCase();
       return o.order_number?.toLowerCase().includes(s) ||
@@ -126,7 +143,7 @@ export function AdminOrders() {
         o.customer_phone?.includes(s);
     }
     return true;
-  }), [orders, filterStatus, search]);
+  }), [orders, filterStatus, search, dateFilter]);
 
   const stats = useMemo(() => ({
     total: orders.length,
@@ -266,11 +283,13 @@ export function AdminOrders() {
 
         <div className="flex gap-2">
           {[
-            { label: 'Aujourd\'hui', range: 'today' },
+            { label: "Aujourd'hui", range: 'today' },
             { label: 'Hier', range: 'yesterday' },
             { label: '7 derniers jours', range: '7days' },
           ].map(r => (
-            <button key={r.range} className={`px-4 py-3 rounded-2xl text-xs font-black border transition-all ${t.cardBorder} ${t.textMuted} hover:bg-gray-50`}>
+            <button key={r.range}
+              onClick={() => setDateFilter(dateFilter === r.range ? '' : r.range)}
+              className={`px-4 py-3 rounded-2xl text-xs font-black border transition-all ${dateFilter === r.range ? 'bg-[#1A3C6E] text-white border-[#1A3C6E]' : `${t.cardBorder} ${t.textMuted} hover:bg-gray-50`}`}>
               {r.label}
             </button>
           ))}

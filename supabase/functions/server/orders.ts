@@ -139,6 +139,40 @@ async function upsertCustomerDb(customer: any) {
   return created?.id || null;
 }
 
+/**
+ * After an order lands, aggregate lifetime metrics on the customer row and
+ * bump per-product `order_count`. Failures are logged but never abort the order.
+ */
+async function aggregateAfterOrderDb(customerId: string | null, orderTotal: number, items: any[], now: string) {
+  try {
+    if (customerId) {
+      const { data: cust } = await db.from('customers').select('total_orders, lifetime_value').eq('id', customerId).maybeSingle();
+      const nextOrders = Number(cust?.total_orders || 0) + 1;
+      const nextLtv = Number(cust?.lifetime_value || 0) + Number(orderTotal || 0);
+      await db.from('customers').update({
+        total_orders: nextOrders,
+        lifetime_value: nextLtv,
+        last_order_at: now,
+        // Basic segmentation — updated on every order.
+        segment: nextLtv >= 30000 ? 'vip' : nextOrders >= 3 ? 'loyal' : 'active',
+      }).eq('id', customerId);
+    }
+  } catch (e) {
+    console.warn('customer aggregate failed:', (e as Error).message);
+  }
+
+  for (const it of items) {
+    if (!it?.product_id) continue;
+    try {
+      const { data: cur } = await db.from('products').select('order_count').eq('id', it.product_id).maybeSingle();
+      const next = Number(cur?.order_count || 0) + Number(it.quantity || 1);
+      await db.from('products').update({ order_count: next }).eq('id', it.product_id);
+    } catch (e) {
+      console.warn('product order_count failed for', it.product_id, (e as Error).message);
+    }
+  }
+}
+
 async function decrementStockDb(items: any[]) {
   for (const item of items) {
     if (!item?.product_id) continue;
@@ -254,6 +288,12 @@ export async function createOrder(c: any) {
             })));
             await decrementStockDb(normalizedItems);
           }
+          await aggregateAfterOrderDb(
+            o.customer_id || null,
+            Number(o.total || body?.total || 0),
+            normalizedItems,
+            now,
+          );
           return respond(c, { order: { ...o, items: normalizedItems } }, 201);
         }
       } catch (e) {

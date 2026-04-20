@@ -171,8 +171,17 @@ export async function createProduct(c: any) {
           description_ar: body.description_ar || '',
           price: Number(body.price) || 0,
           sale_price: body.sale_price ? Number(body.sale_price) : null,
+          cost_price: body.cost_price ? Number(body.cost_price) : null,
           category_id: body.category_id || null,
+          level: body.level || null,
           stock: Number(body.stock) || 0,
+          low_stock_threshold: body.low_stock_threshold != null ? Number(body.low_stock_threshold) : 5,
+          sku: body.sku || null,
+          barcode: body.barcode || null,
+          video_url: body.video_url || null,
+          meta_title: body.meta_title || null,
+          meta_description: body.meta_description || null,
+          tags: Array.isArray(body.tags) ? body.tags : [],
           is_featured: Boolean(body.is_featured),
           is_new: Boolean(body.is_new),
           is_best_seller: Boolean(body.is_best_seller),
@@ -188,6 +197,8 @@ export async function createProduct(c: any) {
           show_in_school_supplies: Boolean(body.show_in_school_supplies),
           section_priority: Number(body.section_priority) || 99,
           sort_order: Number(body.sort_order) || 99,
+          view_count: 0,
+          order_count: 0,
           updated_at: now,
           created_at: now
         };
@@ -313,6 +324,40 @@ export async function updateProduct(c: any) {
     return respond(c, { product: updated });
   } catch (e) {
     return errRes(c, `Erreur lors de la mise à jour du produit: ${e.message}`);
+  }
+}
+
+/**
+ * Public endpoint: increments `view_count` when a product detail page loads.
+ * Lightweight — no auth required, rate-limited client-side via session flag.
+ */
+export async function incrementProductView(c: any) {
+  try {
+    const id = c.req.param("id");
+    if (!id) return errRes(c, "Missing product id", 400);
+
+    if (await useDB()) {
+      try {
+        // Read current then update — keeps things DB-agnostic and avoids RPC setup.
+        const { data: cur } = await db.from('products').select('view_count').eq('id', id).single();
+        const next = Number(cur?.view_count || 0) + 1;
+        await db.from('products').update({ view_count: next }).eq('id', id);
+        return respond(c, { success: true, view_count: next });
+      } catch (e) {
+        console.warn(`DB view increment failed for ${id}:`, e.message);
+      }
+    }
+
+    const val = await kv.get(`products:data:${id}`);
+    if (val) {
+      const p = typeof val === 'string' ? JSON.parse(val) : val;
+      p.view_count = Number(p.view_count || 0) + 1;
+      await kv.set(`products:data:${id}`, JSON.stringify(p));
+      return respond(c, { success: true, view_count: p.view_count });
+    }
+    return respond(c, { success: true, view_count: 0 });
+  } catch (e) {
+    return errRes(c, `View increment error: ${e.message}`);
   }
 }
 

@@ -4,6 +4,7 @@ import {
   MessageCircle, Star, Crown, Calendar, ChevronRight, RefreshCw,
   Package, Clock, Award, BarChart3, Filter, Mail, ArrowUpRight,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { adminApi } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useAdminUI } from '../../context/AdminUIContext';
@@ -59,6 +60,7 @@ export function AdminCustomers() {
     if (!token) return;
     adminApi.get('/customers', token)
       .then(d => setCustomers(d.customers || []))
+      .catch(() => toast.error('Impossible de charger les clients.'))
       .finally(() => setLoading(false));
   }, [token]);
 

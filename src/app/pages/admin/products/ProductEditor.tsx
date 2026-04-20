@@ -250,6 +250,24 @@ export function ProductEditor(props: ProductEditorProps) {
                   </select>
                 </div>
 
+                <div>
+                  <label className={labelCls}>Niveau scolaire / المستوى الدراسي</label>
+                  <select
+                    className={inputCls}
+                    value={(current as any).level || ''}
+                    onChange={e => field('level' as any, e.target.value || null)}
+                  >
+                    <option value="">- Tous les niveaux / كل المستويات -</option>
+                    <option value="primaire">Primaire / ابتدائي</option>
+                    <option value="moyen">Moyen / متوسط</option>
+                    <option value="secondaire">Secondaire / ثانوي</option>
+                    <option value="universite">Universite / جامعي</option>
+                  </select>
+                  <p className={`text-[11px] mt-1.5 ${t.textMuted}`}>
+                    Utilise par le filtre "Niveau scolaire" sur la page Boutique.
+                  </p>
+                </div>
+
                 {showInlineCategoryForm ? (
                   <div className={`rounded-2xl border ${t.cardBorder} p-4 ${t.rowHover} space-y-3`}>
                     <div className="flex items-center justify-between gap-3">

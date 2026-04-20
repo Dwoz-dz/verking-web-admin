@@ -54,6 +54,7 @@ app.get("/make-server-ea36795c/products/:id", products.getProduct);
 app.post("/make-server-ea36795c/products", products.createProduct);
 app.put("/make-server-ea36795c/products/:id", products.updateProduct);
 app.delete("/make-server-ea36795c/products/:id", products.deleteProduct);
+app.post("/make-server-ea36795c/products/:id/view", products.incrementProductView);
 
 // ── CATEGORY ROUTES ──
 app.get("/make-server-ea36795c/categories", categories.listCategories);
@@ -105,5 +106,17 @@ app.get("/make-server-ea36795c/stats", stats.getStats);
 // ── Fallback ──
 app.all("*", (c) => errRes(c, `Route not found: ${c.req.path}`, 404));
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Token',
+  'Access-Control-Max-Age': '600',
+};
+
 // @ts-ignore
-Deno.serve(app.fetch);
+Deno.serve((req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+  return app.fetch(req);
+});
