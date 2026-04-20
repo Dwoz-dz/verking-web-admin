@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { ChevronRight, CreditCard, Headphones, ShieldCheck, Star, Truck } from 'lucide-react';
+import { ChevronRight, CreditCard, Headphones, ShieldCheck, Star, Truck, Package, Users, Award } from 'lucide-react';
 import { useLang } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { api } from '../lib/api';
@@ -104,13 +104,6 @@ function isBannerVisibleNow(banner: BannerRecord, nowTs: number) {
   return true;
 }
 
-/**
- * Resolve a banner's target URL based on `link_mode`:
- *   - 'product'  -> /product/:link_target_id
- *   - 'category' -> /shop?category=:link_target_id
- *   - 'url' | fallback -> banner.link or banner.cta_link (raw string)
- * Falls back to `/shop` so CTAs never dead-end.
- */
 export function resolveBannerHref(banner: any): string {
   const mode = typeof banner?.link_mode === 'string' ? banner.link_mode : 'url';
   const target = typeof banner?.link_target_id === 'string' ? banner.link_target_id : '';
@@ -388,19 +381,19 @@ export function HomePage() {
     heroSection.title_fr || heroBanner?.title_fr,
     heroSection.title_ar || heroBanner?.title_ar,
     lang,
-    lang === 'ar' ? 'مجموعة الدخول المدرسي الجديدة' : 'Nouvelle collection rentrée',
+    lang === 'ar' ? 'مجموعة الدخول المدرسي الجديدة' : 'Prêt pour la Rentrée ?',
   );
   const heroSubtitle = pickLocalized(
     heroSection.subtitle_fr || heroBanner?.subtitle_fr,
     heroSection.subtitle_ar || heroBanner?.subtitle_ar,
     lang,
-    lang === 'ar' ? 'اكتشف عروضنا المميزة للأطفال والمدارس.' : 'Découvrez nos offres scolaires pour enfants et écoles.',
+    lang === 'ar' ? 'اكتشف عروضنا المميزة للأطفال والمدارس.' : 'Découvrez Nos Offres Spéciales pour enfants et écoles.',
   );
   const heroCtaText = pickLocalized(
     heroSection.cta_fr || heroBanner?.cta_fr,
     heroSection.cta_ar || heroBanner?.cta_ar,
     lang,
-    lang === 'ar' ? 'تسوق الآن' : 'Acheter maintenant',
+    lang === 'ar' ? 'تسوق الآن' : 'Découvrir',
   );
   const heroLink = heroBanner
     ? resolveBannerHref({ ...heroBanner, link: asText(heroSection.cta_link) || asText(heroBanner?.link) })
@@ -419,330 +412,576 @@ export function HomePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FDFBF7]">
-        <div className="w-12 h-12 border-4 border-amber-200 border-t-red-600 rounded-full animate-spin" />
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: 'linear-gradient(160deg,#bbd8f0 0%,#cce6ff 20%,#dbeeff 45%,#f0f8ff 80%,#f8fbff 100%)' }}
+      >
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-14 h-14 border-4 border-sky-200 border-t-[#E5252A] rounded-full animate-spin shadow-lg" />
+          <p className="text-sky-700 font-semibold text-sm tracking-wide">
+            {lang === 'ar' ? 'جاري التحميل…' : 'Chargement…'}
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div dir={dir} className="bg-[#FDFBF7] text-gray-900 font-sans w-full overflow-x-hidden">
-      <section className="relative w-full pt-2 pb-0 px-2 md:px-4 max-w-[1400px] mx-auto">
-        <div className="relative w-full rounded-2xl md:rounded-3xl overflow-hidden min-h-[420px] md:min-h-[560px] bg-neutral-900 flex flex-col justify-end shadow-2xl shadow-black/20 border-2 md:border-4 border-white/50">
-          <div className="absolute inset-0 w-full h-full">
-            <img
-              src={heroImage}
-              onError={(event) => {
-                event.currentTarget.src = 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=2022&auto=format&fit=crop';
+    <div
+      dir={dir}
+      className="min-h-screen font-sans w-full overflow-x-hidden relative"
+      style={{ background: 'linear-gradient(160deg,#bbd8f0 0%,#cce6ff 18%,#dbeeff 38%,#eaf5ff 58%,#f4f9ff 78%,#fafcff 100%)' }}
+    >
+      {/* Atmospheric blur blobs */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0" aria-hidden>
+        <div className="absolute -top-40 left-1/3 w-[700px] h-[700px] rounded-full blur-[120px]" style={{ background: 'radial-gradient(circle,rgba(147,197,253,0.35) 0%,transparent 70%)' }} />
+        <div className="absolute top-1/2 -right-32 w-[500px] h-[500px] rounded-full blur-[100px]" style={{ background: 'radial-gradient(circle,rgba(186,230,255,0.28) 0%,transparent 70%)' }} />
+        <div className="absolute bottom-0 -left-24 w-[400px] h-[400px] rounded-full blur-[90px]" style={{ background: 'radial-gradient(circle,rgba(199,210,254,0.25) 0%,transparent 70%)' }} />
+      </div>
+
+      <div className="relative z-10">
+
+        {/* ─── HERO ─── */}
+        <section className="px-3 md:px-5 pt-4 pb-0 max-w-[1400px] mx-auto">
+          <div
+            className="relative rounded-[2rem] overflow-hidden min-h-[440px] md:min-h-[560px] shadow-2xl border-2 border-white/60"
+            style={{ boxShadow: '0 32px 80px -8px rgba(30,80,140,0.25), 0 0 0 1px rgba(255,255,255,0.5) inset' }}
+          >
+            {/* Hero image */}
+            <div className="absolute inset-0">
+              <img
+                src={heroImage}
+                onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=2022&auto=format&fit=crop'; }}
+                alt={heroTitle}
+                className="w-full h-full object-cover object-center"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/10 rtl:from-black/10 rtl:via-black/50 rtl:to-black/80" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+            </div>
+
+            {/* Hero content */}
+            <div className="relative z-10 flex flex-col justify-end h-full min-h-[440px] md:min-h-[560px] p-6 md:p-14">
+              <div className="max-w-2xl rtl:ml-auto">
+                {/* Badge */}
+                <div className="inline-flex items-center gap-2 mb-5 px-4 py-2 rounded-full border border-white/25 shadow-lg"
+                  style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)' }}>
+                  <span className="w-2 h-2 rounded-full bg-amber-300 animate-pulse" />
+                  <span className="font-black text-[10px] md:text-[11px] tracking-[0.22em] uppercase text-white">
+                    Marcelo · Collection 2026
+                  </span>
+                </div>
+
+                {/* Title */}
+                <h1
+                  className="text-white font-black text-4xl md:text-6xl lg:text-7xl leading-[1.02] mb-4 tracking-tight drop-shadow-2xl"
+                  style={{ fontFamily: 'Montserrat, sans-serif', textShadow: '0 4px 24px rgba(0,0,0,0.4)' }}
+                >
+                  {heroTitle}
+                </h1>
+
+                {/* Subtitle */}
+                <p className="text-white/90 text-sm md:text-xl font-medium mb-8 max-w-lg leading-relaxed drop-shadow-md">
+                  {heroSubtitle}
+                </p>
+
+                {/* CTAs */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <Link
+                    to={heroLink}
+                    className="group inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-[0.16em] transition-all duration-200 hover:scale-[1.04] active:scale-[0.98] shadow-xl text-white"
+                    style={{ background: 'linear-gradient(135deg,#E5252A,#c41e23)', boxShadow: '0 8px 32px rgba(229,37,42,0.45)' }}
+                  >
+                    {heroCtaText}
+                    <ChevronRight size={16} className="rtl:rotate-180 transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1" />
+                  </Link>
+                  <Link
+                    to="/shop?promo=true"
+                    className="inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-[0.16em] transition-all duration-200 hover:scale-[1.04] active:scale-[0.98] text-gray-900"
+                    style={{ background: 'linear-gradient(135deg,#FFD700,#FFC107)', boxShadow: '0 8px 32px rgba(255,193,7,0.45)' }}
+                  >
+                    {lang === 'ar' ? 'العروض الخاصة' : 'Offres Spéciales'}
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            {/* Decorative corner blobs inside hero */}
+            <div className="absolute top-6 right-8 w-32 h-32 rounded-full opacity-20 blur-2xl pointer-events-none" style={{ background: 'radial-gradient(circle,#60a5fa,transparent)' }} aria-hidden />
+            <div className="absolute bottom-0 right-1/3 w-48 h-24 rounded-full opacity-15 blur-3xl pointer-events-none" style={{ background: 'radial-gradient(circle,#fbbf24,transparent)' }} aria-hidden />
+          </div>
+
+          {/* Trust badges bar — floats below hero */}
+          {trustSection.enabled !== false && (
+            <div
+              className="relative -mt-5 z-20 mx-3 md:mx-8 lg:mx-16 rounded-[1.25rem] p-3 md:p-4 grid grid-cols-2 md:grid-cols-4 gap-2"
+              style={{
+                background: 'rgba(255,255,255,0.82)',
+                backdropFilter: 'blur(18px)',
+                border: '1.5px solid rgba(255,255,255,0.9)',
+                boxShadow: '0 20px 60px -10px rgba(30,80,140,0.18), 0 1px 0 rgba(255,255,255,0.9) inset',
               }}
-              alt={heroTitle}
-              className="w-full h-full object-cover object-center"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/20" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-transparent to-transparent rtl:from-transparent rtl:to-black/70" />
-          </div>
-
-          <div className="relative z-10 p-5 md:p-12 flex flex-col items-start text-start w-full max-w-3xl rtl:items-end rtl:text-end rtl:ml-auto">
-            <div className="inline-flex items-center gap-2 bg-[#E5252A]/95 backdrop-blur-sm border border-white/20 px-3 py-1 rounded-md mb-4 shadow-lg">
-              <span className="w-2 h-2 rounded-full bg-amber-300 animate-pulse" />
-              <span className="font-black text-[10px] md:text-[11px] tracking-[0.24em] uppercase text-white">
-                Marcelo · Collection 2026
-              </span>
-            </div>
-
-            <h2
-              className="text-white font-black text-3xl md:text-5xl lg:text-6xl leading-[1.05] mb-3 tracking-tight drop-shadow-2xl"
-              style={{ fontFamily: 'Montserrat, sans-serif' }}
             >
-              {heroTitle}
-            </h2>
-
-            <div className="flex items-center gap-2 mb-3">
-              <span className="h-0.5 w-10 bg-amber-400 rounded-full" />
-              <span className="font-black text-[11px] md:text-xs tracking-[0.28em] uppercase text-amber-300">
-                {lang === 'ar' ? 'تشكيلة مدرسية متكاملة' : 'Collection scolaire complète'}
-              </span>
-            </div>
-
-            <p className="text-white/90 text-sm md:text-lg font-medium mb-8 max-w-xl leading-relaxed drop-shadow-md">
-              {heroSubtitle}
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
-              <Link
-                to={heroLink}
-                className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full font-black text-xs md:text-sm uppercase tracking-[0.18em] transition-all hover:scale-[1.03] shadow-xl text-white bg-[#E5252A] hover:bg-[#C41E23]"
-              >
-                {heroCtaText}
-                <ChevronRight size={16} className="rtl:rotate-180 transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1" />
-              </Link>
-              <Link
-                to="/shop?promo=true"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full font-black text-xs md:text-sm uppercase tracking-[0.18em] transition-all hover:scale-[1.03] shadow-xl bg-amber-400 text-black hover:bg-amber-300"
-              >
-                {lang === 'ar' ? 'اكتشف العروض' : 'Voir les promos'}
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {trustSection.enabled !== false && (
-          <div className="relative -mt-4 z-20 mx-4 md:mx-auto max-w-4xl bg-white rounded-xl shadow-lg shadow-sky-900/5 p-3 md:p-4 grid grid-cols-2 md:grid-cols-4 gap-2 divide-x divide-gray-100 rtl:divide-x-reverse border border-gray-50">
-            <div className="flex flex-col items-center justify-center text-center gap-1.5">
-              <div className="w-10 h-10 bg-sky-50 text-[#1A3C6E] rounded-full flex items-center justify-center"><Truck size={20} /></div>
-              <span className="font-bold text-[10px] md:text-xs text-gray-800">{lang === 'ar' ? 'توصيل سريع' : 'Livraison rapide'}</span>
-            </div>
-            <div className="flex flex-col items-center justify-center text-center gap-1.5">
-              <div className="w-10 h-10 bg-green-50 text-green-600 rounded-full flex items-center justify-center"><CreditCard size={20} /></div>
-              <span className="font-bold text-[10px] md:text-xs text-gray-800">{lang === 'ar' ? 'الدفع عند الاستلام' : 'Paiement à la livraison'}</span>
-            </div>
-            <div className="flex flex-col items-center justify-center text-center gap-1.5">
-              <div className="w-10 h-10 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center"><ShieldCheck size={20} /></div>
-              <span className="font-bold text-[10px] md:text-xs text-gray-800">{lang === 'ar' ? 'جودة عالية' : 'Qualité premium'}</span>
-            </div>
-            <div className="flex flex-col items-center justify-center text-center gap-1.5">
-              <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center"><Headphones size={20} /></div>
-              <span className="font-bold text-[10px] md:text-xs text-gray-800">{lang === 'ar' ? 'دعم العملاء' : 'Support client'}</span>
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="py-12 md:py-16 px-4 md:px-8 max-w-[1400px] mx-auto">
-        {content?.categories_marquee_enabled === true ? (
-          <div className="mb-4 md:mb-6">
-            <InlineAnnouncementStrip content={content} lang={lang} className="rounded-2xl" />
-          </div>
-        ) : null}
-
-        {categoriesStrip.enabled ? (
-          <div className="mb-6 md:mb-8">
-            <CategoriesMarketingStrip config={categoriesStrip} lang={lang} dir={dir} chips={[]} ctaHref={categoriesStrip.cta_link} />
-          </div>
-        ) : null}
-
-        {categorySection.enabled !== false && (
-          <>
-            <h2 className="text-2xl md:text-3xl font-black text-center tracking-tight mb-8" style={{ color: theme.primary_color, fontFamily: 'Montserrat, sans-serif' }}>
-              {pickLocalized(categorySection.title_fr, categorySection.title_ar, lang, lang === 'ar' ? 'فئاتنا الرئيسية' : 'Nos catégories')}
-            </h2>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-              {categoryCards.map((category) => (
-                <Link key={category.id} to={`/shop?category=${encodeURIComponent(category.id)}`} className="group relative block aspect-[4/5] overflow-hidden rounded-2xl bg-white shadow-md border-2 border-transparent hover:border-amber-300 transition-all duration-300 hover:-translate-y-1">
-                  <img
-                    src={category.image || 'https://images.unsplash.com/photo-1588690153163-99b380cedad9?q=80&w=600'}
-                    alt={pickLocalized(category.name_fr, category.name_ar, lang)}
-                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#1A3C6E]/90 via-[#1A3C6E]/40 to-transparent" />
-                  <div className="absolute inset-x-0 bottom-0 p-4 flex flex-col items-center text-center">
-                    <h3 className="font-black text-white text-xl md:text-2xl mb-2 tracking-tight drop-shadow-md">
-                      {pickLocalized(category.name_fr, category.name_ar, lang)}
-                    </h3>
-                    <span className="inline-flex items-center gap-1 bg-[#E5252A] text-white px-4 py-1.5 rounded-full font-bold text-[10px] md:text-xs shadow-md translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
-                      {lang === 'ar' ? 'تسوق' : 'Shop'} <ChevronRight size={14} className="rtl:rotate-180" />
-                    </span>
-                  </div>
-                </Link>
+              {[
+                { icon: <Truck size={20} />, bg: 'bg-sky-50', color: 'text-sky-600', label: lang === 'ar' ? 'توصيل سريع' : 'Livraison rapide' },
+                { icon: <CreditCard size={20} />, bg: 'bg-green-50', color: 'text-green-600', label: lang === 'ar' ? 'الدفع عند الاستلام' : 'Paiement à la livraison' },
+                { icon: <ShieldCheck size={20} />, bg: 'bg-amber-50', color: 'text-amber-500', label: lang === 'ar' ? 'جودة عالية' : 'Qualité premium' },
+                { icon: <Headphones size={20} />, bg: 'bg-purple-50', color: 'text-purple-600', label: lang === 'ar' ? 'دعم العملاء' : 'Support client' },
+              ].map((item, i) => (
+                <div key={i} className="flex flex-col items-center justify-center text-center gap-2 py-1">
+                  <div className={`w-10 h-10 ${item.bg} ${item.color} rounded-2xl flex items-center justify-center shadow-sm`}>{item.icon}</div>
+                  <span className="font-bold text-[10px] md:text-[11px] text-gray-700 leading-tight">{item.label}</span>
+                </div>
               ))}
             </div>
-          </>
-        )}
-      </section>
-
-      {showFeaturedSection && featuredProducts.length > 0 && (
-        <section className="py-10 bg-white rounded-3xl shadow-md shadow-sky-900/5 mx-2 md:mx-6 px-3 md:px-6 mb-8 border border-gray-50">
-          <div className="max-w-[1400px] mx-auto">
-            <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-3">
-              <div>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="w-6 h-1 bg-amber-400 rounded-full" />
-                  <h2 className="text-2xl md:text-3xl font-black tracking-tight" style={{ color: theme.primary_color }}>
-                    {pickLocalized(featuredSection.title_fr, featuredSection.title_ar, lang, lang === 'ar' ? 'منتجات مختارة' : 'Sélection Premium')}
-                  </h2>
-                </div>
-                <p className="text-gray-500 font-medium text-xs md:text-sm md:ml-8 rtl:mr-8">
-                  {pickLocalized(featuredSection.subtitle_fr, featuredSection.subtitle_ar, lang, lang === 'ar' ? 'اختياراتنا الأبرز لهذا الموسم.' : 'Nos produits les plus mis en avant.')}
-                </p>
-              </div>
-              <Link to={asText(featuredSection.cta_link) || '/shop?featured=true'} className="inline-flex items-center gap-1 text-[#E5252A] font-bold hover:text-[#c91d22] transition-colors bg-red-50/50 px-4 py-2 rounded-full text-xs md:text-sm">
-                {pickLocalized(featuredSection.cta_fr, featuredSection.cta_ar, lang, lang === 'ar' ? 'عرض الكل' : 'Voir tout')} <ChevronRight size={14} className="rtl:rotate-180" />
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-3">
-              {featuredProducts.map((product) => <ProductCard key={product.id} product={product} />)}
-            </div>
-          </div>
+          )}
         </section>
-      )}
 
-      {(showNewSection || showBestSection) && (
-        <section className="py-10 md:py-14 px-3 md:px-6 max-w-[1400px] mx-auto">
-          <div className="grid gap-6 lg:grid-cols-2">
-            {showNewSection && newProducts.length > 0 && (
-              <div className="bg-white p-5 md:p-8 rounded-3xl shadow-md border border-gray-50 shadow-sky-900/5">
-                <div className="flex items-start justify-between mb-6">
-                  <div>
-                    <h2 className="text-xl md:text-2xl font-black tracking-tight mb-1 flex items-center gap-2" style={{ color: theme.primary_color }}>
-                      <span className="text-xl">✨</span> {pickLocalized(newSection.title_fr, newSection.title_ar, lang, lang === 'ar' ? 'وصل حديثًا' : 'Nouveautés')}
-                    </h2>
-                    <p className="text-gray-500 font-medium text-xs md:text-sm">
-                      {pickLocalized(newSection.subtitle_fr, newSection.subtitle_ar, lang, lang === 'ar' ? 'أحدث المنتجات المضافة.' : 'Les dernières références ajoutées.')}
-                    </p>
-                  </div>
-                  <Link to={asText(newSection.cta_link) || '/shop?new=true'} className="text-sky-500 hover:text-sky-600 font-bold text-xs transition-colors shrink-0 bg-sky-50 w-8 h-8 flex items-center justify-center rounded-full shadow-sm">
-                    <ChevronRight size={16} className="rtl:rotate-180" />
-                  </Link>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {newProducts.slice(0, 4).map((product) => <ProductCard key={product.id} product={product} />)}
-                </div>
-              </div>
-            )}
-
-            {showBestSection && bestSellerProducts.length > 0 && (
-              <div className="bg-white p-5 md:p-8 rounded-3xl shadow-md border border-gray-50">
-                <div className="flex items-start justify-between mb-6">
-                  <div>
-                    <h2 className="text-xl md:text-2xl font-black tracking-tight mb-1 flex items-center gap-2" style={{ color: theme.primary_color }}>
-                      <span className="text-xl">🔥</span> {pickLocalized(bestSection.title_fr, bestSection.title_ar, lang, lang === 'ar' ? 'الأكثر مبيعًا' : 'Meilleures ventes')}
-                    </h2>
-                    <p className="text-gray-500 font-medium text-xs md:text-sm">
-                      {pickLocalized(bestSection.subtitle_fr, bestSection.subtitle_ar, lang, lang === 'ar' ? 'الأعلى طلبًا من عملائنا.' : 'Les produits les plus demandés.')}
-                    </p>
-                  </div>
-                  <Link to={asText(bestSection.cta_link) || '/shop?best_seller=true'} className="text-sky-500 hover:text-sky-600 font-bold text-xs transition-colors shrink-0 bg-sky-50 w-8 h-8 flex items-center justify-center rounded-full shadow-sm">
-                    <ChevronRight size={16} className="rtl:rotate-180" />
-                  </Link>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {bestSellerProducts.slice(0, 4).map((product) => <ProductCard key={product.id} product={product} />)}
-                </div>
-              </div>
-            )}
-          </div>
+        {/* ─── ANNOUNCEMENT / CATEGORIES STRIP ─── */}
+        <section className="pt-8 pb-0 px-3 md:px-5 max-w-[1400px] mx-auto">
+          {content?.categories_marquee_enabled === true && (
+            <div className="mb-4">
+              <InlineAnnouncementStrip content={content} lang={lang} className="rounded-2xl" />
+            </div>
+          )}
+          {categoriesStrip.enabled && (
+            <div className="mb-4">
+              <CategoriesMarketingStrip config={categoriesStrip} lang={lang} dir={dir} chips={[]} ctaHref={categoriesStrip.cta_link} />
+            </div>
+          )}
         </section>
-      )}
 
-      {promoSection.enabled !== false && (
-        <section className="py-12 bg-sky-50/50 px-3 md:px-6 border-t border-sky-100 border-dashed">
-          <div className="max-w-[1400px] mx-auto space-y-6">
-            {promoBanners.length > 0 && (
-              <div className="grid gap-4 md:grid-cols-2">
-                {promoBanners.slice(0, 2).map((banner) => (
-                  <Link key={banner.id} to={resolveBannerHref(banner)} className="group relative block min-h-[180px] overflow-hidden rounded-3xl border border-red-100 shadow-sm">
-                    <img
-                      src={asText(banner.desktop_image) || asText(banner.image) || 'https://images.unsplash.com/photo-1544816155-12df9643f363?q=80&w=800'}
-                      alt={pickLocalized(banner.title_fr, banner.title_ar, lang)}
-                      className="absolute inset-0 h-full w-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#1A3C6E]/80 via-[#1A3C6E]/45 to-transparent" />
-                    <div className="relative z-10 p-5 text-white max-w-[80%]">
-                      <h3 className="text-lg md:text-xl font-black mb-1">{pickLocalized(banner.title_fr, banner.title_ar, lang)}</h3>
-                      <p className="text-xs md:text-sm opacity-90 mb-3">{pickLocalized(banner.subtitle_fr, banner.subtitle_ar, lang)}</p>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-3 py-1 text-xs font-black">
-                        {pickLocalized(banner.cta_fr, banner.cta_ar, lang, lang === 'ar' ? 'اكتشف' : 'Découvrir')} <ChevronRight size={12} className="rtl:rotate-180" />
-                      </span>
+        {/* ─── MAIN BENTO CONTENT ─── */}
+        <section className="px-3 md:px-5 py-6 max-w-[1400px] mx-auto space-y-5">
+
+          {/* Bento Row 1: Featured Products + Categories */}
+          {(showFeaturedSection && featuredProducts.length > 0) || categorySection.enabled !== false ? (
+            <div className="grid gap-5 lg:grid-cols-[3fr_2fr]">
+
+              {/* Featured Products Panel */}
+              {showFeaturedSection && featuredProducts.length > 0 && (
+                <div
+                  className="rounded-[1.75rem] p-5 md:p-7"
+                  style={{
+                    background: 'rgba(255,255,255,0.78)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1.5px solid rgba(255,255,255,0.85)',
+                    boxShadow: '0 20px 60px -10px rgba(30,80,140,0.12)',
+                  }}
+                >
+                  {/* Panel header */}
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest text-white shadow"
+                        style={{ background: 'linear-gradient(135deg,#E5252A,#c41e23)' }}>
+                        <Star size={12} className="fill-white" />
+                        {lang === 'ar' ? 'مختار' : 'Premium'}
+                      </div>
+                      <h2 className="font-black text-xl md:text-2xl text-gray-900 tracking-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                        {pickLocalized(featuredSection.title_fr, featuredSection.title_ar, lang, lang === 'ar' ? 'منتجات مختارة' : 'Produits Phare')}
+                      </h2>
                     </div>
-                  </Link>
-                ))}
-              </div>
-            )}
+                    <Link
+                      to={asText(featuredSection.cta_link) || '/shop?featured=true'}
+                      className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-[#E5252A] hover:text-[#c41e23] transition-colors px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100"
+                    >
+                      {pickLocalized(featuredSection.cta_fr, featuredSection.cta_ar, lang, lang === 'ar' ? 'عرض الكل' : 'Voir tout')}
+                      <ChevronRight size={13} className="rtl:rotate-180" />
+                    </Link>
+                  </div>
+                  <p className="text-gray-500 text-xs md:text-sm font-medium mb-5 -mt-2">
+                    {pickLocalized(featuredSection.subtitle_fr, featuredSection.subtitle_ar, lang, lang === 'ar' ? 'اختياراتنا الأبرز لهذا الموسم' : 'Nos sélections phares de la saison')}
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {featuredProducts.slice(0, 6).map((product) => (
+                      <ProductCard key={product.id} product={product} />
+                    ))}
+                  </div>
+                  <div className="sm:hidden mt-4 flex justify-center">
+                    <Link to={asText(featuredSection.cta_link) || '/shop?featured=true'} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#E5252A] px-5 py-2.5 rounded-xl bg-red-50">
+                      {pickLocalized(featuredSection.cta_fr, featuredSection.cta_ar, lang, lang === 'ar' ? 'عرض الكل' : 'Voir tout')} <ChevronRight size={13} className="rtl:rotate-180" />
+                    </Link>
+                  </div>
+                </div>
+              )}
 
-            {promoProducts.length > 0 && (
-              <div>
-                <div className="flex items-start justify-between mb-4">
+              {/* Categories Panel */}
+              {categorySection.enabled !== false && categoryCards.length > 0 && (
+                <div
+                  className="rounded-[1.75rem] p-5 md:p-7"
+                  style={{
+                    background: 'rgba(255,255,255,0.78)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1.5px solid rgba(255,255,255,0.85)',
+                    boxShadow: '0 20px 60px -10px rgba(30,80,140,0.12)',
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest text-white shadow"
+                        style={{ background: 'linear-gradient(135deg,#1A3C6E,#1D4ED8)' }}>
+                        {lang === 'ar' ? 'تصفح' : 'Explorer'}
+                      </div>
+                      <h2 className="font-black text-xl md:text-2xl text-gray-900 tracking-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                        {pickLocalized(categorySection.title_fr, categorySection.title_ar, lang, lang === 'ar' ? 'الفئات' : 'Catégories')}
+                      </h2>
+                    </div>
+                    <Link
+                      to="/shop"
+                      className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-[#1D4ED8] hover:text-[#1A3C6E] transition-colors px-4 py-2 rounded-xl bg-blue-50 hover:bg-blue-100"
+                    >
+                      {lang === 'ar' ? 'عرض الكل' : 'Voir tout'}
+                      <ChevronRight size={13} className="rtl:rotate-180" />
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {categoryCards.slice(0, 4).map((category, idx) => (
+                      <Link
+                        key={category.id}
+                        to={`/shop?category=${encodeURIComponent(category.id)}`}
+                        className="group relative overflow-hidden rounded-2xl shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+                        style={{ aspectRatio: idx < 2 ? '1.1/1' : '1/1' }}
+                      >
+                        <img
+                          src={category.image || 'https://images.unsplash.com/photo-1588690153163-99b380cedad9?q=80&w=600'}
+                          alt={pickLocalized(category.name_fr, category.name_ar, lang)}
+                          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#1A3C6E]/85 via-[#1A3C6E]/30 to-transparent" />
+                        {/* Category name */}
+                        <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col gap-1">
+                          <h3 className="font-black text-white text-sm md:text-base tracking-tight leading-tight drop-shadow-md line-clamp-2">
+                            {pickLocalized(category.name_fr, category.name_ar, lang)}
+                          </h3>
+                          <span className="inline-flex items-center gap-1 self-start bg-white/20 backdrop-blur-sm border border-white/25 text-white text-[9px] font-bold px-2 py-0.5 rounded-full transition-all duration-300 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100">
+                            {lang === 'ar' ? 'تسوق' : 'Shop'} <ChevronRight size={9} className="rtl:rotate-180" />
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {/* Bento Row 2: Promo Block */}
+          {promoSection.enabled !== false && (promoBanners.length > 0 || promoProducts.length > 0) && (
+            <div
+              className="rounded-[1.75rem] overflow-hidden"
+              style={{
+                background: 'rgba(255,255,255,0.78)',
+                backdropFilter: 'blur(20px)',
+                border: '1.5px solid rgba(255,255,255,0.85)',
+                boxShadow: '0 20px 60px -10px rgba(229,37,42,0.15)',
+              }}
+            >
+              {/* Promo header band */}
+              <div
+                className="px-6 md:px-8 py-5 flex items-center justify-between"
+                style={{ background: 'linear-gradient(135deg,rgba(229,37,42,0.08),rgba(229,37,42,0.04))' }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest text-white shadow"
+                    style={{ background: 'linear-gradient(135deg,#E5252A,#c41e23)' }}>
+                    🏷️ {lang === 'ar' ? 'تخفيضات' : 'Promo'}
+                  </div>
                   <div>
-                    <h2 className="text-xl md:text-2xl font-black tracking-tight mb-1 flex items-center gap-2" style={{ color: '#E5252A' }}>
-                      <span className="text-xl">🏷️</span> {pickLocalized(promoSection.title_fr, promoSection.title_ar, lang, lang === 'ar' ? 'عروض خاصة' : 'Promotions')}
+                    <h2 className="font-black text-xl md:text-2xl text-gray-900 tracking-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      {pickLocalized(promoSection.title_fr, promoSection.title_ar, lang, lang === 'ar' ? 'عروض خاصة' : 'Promotions')}
                     </h2>
-                    <p className="text-red-700/80 font-medium text-xs md:text-sm">
-                      {pickLocalized(promoSection.subtitle_fr, promoSection.subtitle_ar, lang, lang === 'ar' ? 'خصومات محدودة المدة.' : 'Remises limitées dans le temps.')}
+                    <p className="text-red-600/70 text-xs font-medium mt-0.5">
+                      {pickLocalized(promoSection.subtitle_fr, promoSection.subtitle_ar, lang, lang === 'ar' ? 'خصومات محدودة المدة' : 'Remises limitées dans le temps')}
                     </p>
                   </div>
-                  <Link to={asText(promoSection.cta_link) || '/shop?promo=true'} className="text-[#E5252A] hover:text-red-700 font-bold text-xs transition-colors shrink-0 bg-red-50 w-8 h-8 flex items-center justify-center rounded-full shadow-sm">
-                    <ChevronRight size={16} className="rtl:rotate-180" />
-                  </Link>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-3">
-                  {promoProducts.map((product) => <ProductCard key={product.id} product={product} />)}
-                </div>
+                <Link
+                  to={asText(promoSection.cta_link) || '/shop?promo=true'}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-[#E5252A] hover:text-[#c41e23] transition-colors px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100"
+                >
+                  {lang === 'ar' ? 'عرض الكل' : 'Voir tout'} <ChevronRight size={13} className="rtl:rotate-180" />
+                </Link>
               </div>
-            )}
-          </div>
-        </section>
-      )}
 
-      {showTestimonialsSection && (
-        <section className="py-12 px-4 md:px-8 max-w-[1200px] mx-auto">
-          <div className="rounded-3xl border border-gray-100 bg-white p-8 text-center shadow-sm">
-            <h2 className="text-2xl md:text-3xl font-black mb-2" style={{ color: theme.primary_color }}>
-              {pickLocalized(testimonialsSection.title_fr, testimonialsSection.title_ar, lang, lang === 'ar' ? 'آراء العملاء' : 'Témoignages')}
-            </h2>
-            <p className="text-gray-500 text-sm">
-              {pickLocalized(
-                testimonialsSection.subtitle_fr,
-                testimonialsSection.subtitle_ar,
-                lang,
-                lang === 'ar' ? 'نقوم بتحديث هذه المساحة باستمرار من لوحات الإدارة.' : 'Cette section est pilotée depuis le back-office.',
+              <div className="p-5 md:p-7 space-y-5">
+                {/* Promo banners */}
+                {promoBanners.length > 0 && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {promoBanners.slice(0, 2).map((banner) => (
+                      <Link
+                        key={banner.id}
+                        to={resolveBannerHref(banner)}
+                        className="group relative block min-h-[160px] md:min-h-[200px] overflow-hidden rounded-2xl shadow-lg border border-white/40 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5"
+                      >
+                        <img
+                          src={asText(banner.desktop_image) || asText(banner.image) || 'https://images.unsplash.com/photo-1544816155-12df9643f363?q=80&w=800'}
+                          alt={pickLocalized(banner.title_fr, banner.title_ar, lang)}
+                          className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-r from-[#1A3C6E]/85 via-[#1A3C6E]/50 to-transparent rtl:from-transparent rtl:via-[#1A3C6E]/50 rtl:to-[#1A3C6E]/85" />
+                        <div className="relative z-10 h-full flex flex-col justify-center p-5 max-w-[80%] rtl:max-w-none rtl:ml-auto">
+                          <h3 className="text-lg md:text-xl font-black text-white mb-1 leading-tight">{pickLocalized(banner.title_fr, banner.title_ar, lang)}</h3>
+                          <p className="text-xs md:text-sm text-white/85 mb-4">{pickLocalized(banner.subtitle_fr, banner.subtitle_ar, lang)}</p>
+                          <span className="inline-flex items-center gap-1.5 self-start text-xs font-black text-white px-4 py-2 rounded-full transition-all"
+                            style={{ background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.25)' }}>
+                            {pickLocalized(banner.cta_fr, banner.cta_ar, lang, lang === 'ar' ? 'اكتشف' : 'Découvrir')}
+                            <ChevronRight size={12} className="rtl:rotate-180" />
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+
+                {/* Promo products */}
+                {promoProducts.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                    {promoProducts.map((product) => (
+                      <ProductCard key={product.id} product={product} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Bento Row 3: New Arrivals + Best Sellers */}
+          {(showNewSection && newProducts.length > 0) || (showBestSection && bestSellerProducts.length > 0) ? (
+            <div className="grid gap-5 lg:grid-cols-2">
+              {showNewSection && newProducts.length > 0 && (
+                <div
+                  className="rounded-[1.75rem] p-5 md:p-7"
+                  style={{
+                    background: 'rgba(255,255,255,0.78)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1.5px solid rgba(255,255,255,0.85)',
+                    boxShadow: '0 20px 60px -10px rgba(30,80,140,0.12)',
+                  }}
+                >
+                  <div className="flex items-start justify-between mb-5">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-lg">✨</span>
+                        <h2 className="font-black text-xl md:text-2xl text-gray-900 tracking-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                          {pickLocalized(newSection.title_fr, newSection.title_ar, lang, lang === 'ar' ? 'وصل حديثًا' : 'Nouveautés')}
+                        </h2>
+                      </div>
+                      <p className="text-gray-500 text-xs md:text-sm font-medium">
+                        {pickLocalized(newSection.subtitle_fr, newSection.subtitle_ar, lang, lang === 'ar' ? 'أحدث المنتجات المضافة' : 'Les dernières références ajoutées')}
+                      </p>
+                    </div>
+                    <Link
+                      to={asText(newSection.cta_link) || '/shop?new=true'}
+                      className="shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center bg-sky-50 text-sky-500 hover:bg-sky-100 hover:text-sky-700 transition-colors shadow-sm"
+                    >
+                      <ChevronRight size={16} className="rtl:rotate-180" />
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {newProducts.slice(0, 4).map((product) => (
+                      <ProductCard key={product.id} product={product} />
+                    ))}
+                  </div>
+                </div>
               )}
-            </p>
-          </div>
-        </section>
-      )}
 
-      {showWholesaleSection && (
-        <section className="py-16 px-4 md:px-8">
-          <div className="max-w-[1000px] mx-auto text-center rounded-3xl p-8 md:p-14 shadow-xl relative overflow-hidden text-white" style={{ background: `linear-gradient(135deg, ${theme.primary_color}, ${theme.secondary_color || '#0A1A32'})` }}>
-            <div className="absolute top-0 right-0 w-48 h-48 bg-red-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30 translate-x-1/2 -translate-y-1/2" />
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-amber-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30 -translate-x-1/2 translate-y-1/2" />
+              {showBestSection && bestSellerProducts.length > 0 && (
+                <div
+                  className="rounded-[1.75rem] p-5 md:p-7"
+                  style={{
+                    background: 'rgba(255,255,255,0.78)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1.5px solid rgba(255,255,255,0.85)',
+                    boxShadow: '0 20px 60px -10px rgba(30,80,140,0.12)',
+                  }}
+                >
+                  <div className="flex items-start justify-between mb-5">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-lg">🔥</span>
+                        <h2 className="font-black text-xl md:text-2xl text-gray-900 tracking-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                          {pickLocalized(bestSection.title_fr, bestSection.title_ar, lang, lang === 'ar' ? 'الأكثر مبيعًا' : 'Meilleures Ventes')}
+                        </h2>
+                      </div>
+                      <p className="text-gray-500 text-xs md:text-sm font-medium">
+                        {pickLocalized(bestSection.subtitle_fr, bestSection.subtitle_ar, lang, lang === 'ar' ? 'الأعلى طلبًا من عملائنا' : 'Les produits les plus demandés')}
+                      </p>
+                    </div>
+                    <Link
+                      to={asText(bestSection.cta_link) || '/shop?best_seller=true'}
+                      className="shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center bg-amber-50 text-amber-500 hover:bg-amber-100 hover:text-amber-700 transition-colors shadow-sm"
+                    >
+                      <ChevronRight size={16} className="rtl:rotate-180" />
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {bestSellerProducts.slice(0, 4).map((product) => (
+                      <ProductCard key={product.id} product={product} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
 
-            <div className="relative z-10">
-              <h2 className="text-2xl md:text-4xl lg:text-5xl font-black mb-4 tracking-tight leading-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                {pickLocalized(wholesaleSection.title_fr, wholesaleSection.title_ar, lang, lang === 'ar' ? 'فضاء الجملة للموزعين والتجار' : 'Espace grossiste pour distributeurs')}
+          {/* Bento Row 4: Trust Stats */}
+          {trustSection.enabled !== false && (
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { icon: <Package size={22} />, num: '15 000+', label: lang === 'ar' ? 'طلبات مُسلَّمة' : 'Commandes Livrées', color: 'text-[#E5252A]', bg: 'bg-red-50', iconBg: 'bg-red-100 text-[#E5252A]' },
+                { icon: <Award size={22} />, num: '300+', label: lang === 'ar' ? 'منتجات تعليمية' : 'Produits Éducatifs', color: 'text-[#1D4ED8]', bg: 'bg-blue-50', iconBg: 'bg-blue-100 text-[#1D4ED8]' },
+                { icon: <Users size={22} />, num: '50 000+', label: lang === 'ar' ? 'عملاء راضون' : 'Clients Satisfaits', color: 'text-green-600', bg: 'bg-green-50', iconBg: 'bg-green-100 text-green-600' },
+              ].map((stat, i) => (
+                <div
+                  key={i}
+                  className="rounded-[1.5rem] p-4 md:p-6 flex flex-col items-center justify-center text-center gap-2 md:gap-3 transition-all duration-300 hover:-translate-y-1"
+                  style={{
+                    background: 'rgba(255,255,255,0.82)',
+                    backdropFilter: 'blur(18px)',
+                    border: '1.5px solid rgba(255,255,255,0.9)',
+                    boxShadow: '0 16px 48px -8px rgba(30,80,140,0.12)',
+                  }}
+                >
+                  <div className={`w-10 h-10 md:w-12 md:h-12 rounded-2xl flex items-center justify-center shadow-sm ${stat.iconBg}`}>
+                    {stat.icon}
+                  </div>
+                  <p className={`font-black text-2xl md:text-3xl lg:text-4xl leading-none ${stat.color}`} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                    {stat.num}
+                  </p>
+                  <p className="text-gray-600 font-semibold text-[10px] md:text-xs leading-tight">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Testimonials */}
+          {showTestimonialsSection && (
+            <div
+              className="rounded-[1.75rem] p-7 md:p-10 text-center"
+              style={{
+                background: 'rgba(255,255,255,0.78)',
+                backdropFilter: 'blur(20px)',
+                border: '1.5px solid rgba(255,255,255,0.85)',
+                boxShadow: '0 20px 60px -10px rgba(30,80,140,0.10)',
+              }}
+            >
+              <h2 className="font-black text-2xl md:text-3xl text-gray-900 mb-2" style={{ fontFamily: 'Montserrat, sans-serif', color: theme.primary_color }}>
+                {pickLocalized(testimonialsSection.title_fr, testimonialsSection.title_ar, lang, lang === 'ar' ? 'آراء العملاء' : 'Témoignages')}
               </h2>
-              <p className="text-blue-100 text-xs md:text-sm font-medium mb-8 max-w-xl mx-auto leading-relaxed">
+              <p className="text-gray-500 text-sm">
                 {pickLocalized(
-                  wholesaleSection.subtitle_fr,
-                  wholesaleSection.subtitle_ar,
+                  testimonialsSection.subtitle_fr,
+                  testimonialsSection.subtitle_ar,
                   lang,
-                  lang === 'ar' ? 'انضم إلى شبكة شركائنا للاستفادة من عروض الجملة.' : 'Rejoignez notre réseau B2B avec des offres dédiées.',
+                  lang === 'ar' ? 'نقوم بتحديث هذه المساحة باستمرار من لوحات الإدارة.' : 'Cette section est pilotée depuis le back-office.',
                 )}
               </p>
-              <Link
-                to={asText(wholesaleSection.cta_link) || '/wholesale'}
-                className="inline-block bg-amber-400 text-[#1A3C6E] hover:bg-amber-500 px-8 py-3 rounded-full font-black text-xs md:text-sm uppercase tracking-wider transition-transform hover:scale-105 shadow-md shadow-amber-500/20"
-              >
-                {pickLocalized(wholesaleSection.cta_fr, wholesaleSection.cta_ar, lang, lang === 'ar' ? 'اكتشف فضاء الجملة' : 'Découvrir l’espace grossiste')}
-              </Link>
             </div>
-          </div>
-        </section>
-      )}
+          )}
 
-      {newsletterSection.enabled !== false && (
-        <section className="pb-12 px-4 md:px-8">
-          <div className="max-w-[1000px] mx-auto rounded-3xl border border-gray-100 bg-white p-6 md:p-8 shadow-sm">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <h3 className="text-xl md:text-2xl font-black mb-1" style={{ color: theme.primary_color }}>
-                  {pickLocalized(newsletterSection.title_fr, newsletterSection.title_ar, lang, pickLocalized(content?.newsletter_popup?.title_fr, content?.newsletter_popup?.title_ar, lang, lang === 'ar' ? 'النشرة البريدية' : 'Newsletter'))}
-                </h3>
-                <p className="text-sm text-gray-500">
-                  {pickLocalized(newsletterSection.subtitle_fr, newsletterSection.subtitle_ar, lang, pickLocalized(content?.newsletter_popup?.description_fr, content?.newsletter_popup?.description_ar, lang))}
+          {/* Wholesale */}
+          {showWholesaleSection && (
+            <div
+              className="rounded-[1.75rem] overflow-hidden relative"
+              style={{ background: `linear-gradient(135deg, ${theme.primary_color || '#1A3C6E'}, ${theme.secondary_color || '#0A1A32'})` }}
+            >
+              {/* Decorative blobs inside */}
+              <div className="absolute top-0 right-0 w-64 h-64 rounded-full mix-blend-screen blur-3xl opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle,#E5252A,transparent)', transform: 'translate(30%,-30%)' }} aria-hidden />
+              <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full mix-blend-screen blur-3xl opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle,#FFD700,transparent)', transform: 'translate(-30%,30%)' }} aria-hidden />
+
+              <div className="relative z-10 px-7 py-10 md:px-14 md:py-14 text-center">
+                <div className="inline-flex items-center gap-2 mb-5 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest text-white"
+                  style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)' }}>
+                  {lang === 'ar' ? '🏢 فضاء الجملة' : '🏢 Espace B2B'}
+                </div>
+                <h2
+                  className="font-black text-2xl md:text-4xl lg:text-5xl text-white mb-4 leading-tight tracking-tight"
+                  style={{ fontFamily: 'Montserrat, sans-serif', textShadow: '0 4px 20px rgba(0,0,0,0.3)' }}
+                >
+                  {pickLocalized(wholesaleSection.title_fr, wholesaleSection.title_ar, lang, lang === 'ar' ? 'فضاء الجملة للموزعين والتجار' : 'Espace grossiste pour distributeurs')}
+                </h2>
+                <p className="text-blue-100/90 text-sm md:text-base font-medium mb-8 max-w-xl mx-auto leading-relaxed">
+                  {pickLocalized(
+                    wholesaleSection.subtitle_fr,
+                    wholesaleSection.subtitle_ar,
+                    lang,
+                    lang === 'ar' ? 'انضم إلى شبكة شركائنا للاستفادة من عروض الجملة.' : 'Rejoignez notre réseau B2B avec des offres dédiées.',
+                  )}
                 </p>
+                <Link
+                  to={asText(wholesaleSection.cta_link) || '/wholesale'}
+                  className="inline-block px-10 py-4 rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-200 hover:scale-[1.04] active:scale-[0.98] shadow-xl text-[#1A3C6E]"
+                  style={{ background: 'linear-gradient(135deg,#FFD700,#FFC107)', boxShadow: '0 8px 32px rgba(255,193,7,0.4)' }}
+                >
+                  {pickLocalized(wholesaleSection.cta_fr, wholesaleSection.cta_ar, lang, lang === 'ar' ? 'اكتشف فضاء الجملة' : "Découvrir l'espace grossiste")}
+                </Link>
               </div>
-              <Link
-                to={asText(newsletterSection.cta_link) || '#newsletter'}
-                className="inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-black text-white"
-                style={{ backgroundColor: theme.primary_color }}
-              >
-                {pickLocalized(newsletterSection.cta_fr, newsletterSection.cta_ar, lang, pickLocalized(content?.newsletter_popup?.button_text_fr, content?.newsletter_popup?.button_text_ar, lang, lang === 'ar' ? 'اشترك الآن' : 'Je m’abonne'))}
-              </Link>
             </div>
-          </div>
+          )}
+
+          {/* Newsletter */}
+          {newsletterSection.enabled !== false && (
+            <div
+              className="rounded-[1.75rem] p-6 md:p-8"
+              style={{
+                background: 'rgba(255,255,255,0.82)',
+                backdropFilter: 'blur(18px)',
+                border: '1.5px solid rgba(255,255,255,0.9)',
+                boxShadow: '0 20px 60px -10px rgba(30,80,140,0.10)',
+              }}
+            >
+              <div className="flex flex-col md:flex-row md:items-center gap-5 md:gap-8">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xl">📩</span>
+                    <h3 className="font-black text-xl md:text-2xl text-gray-900 tracking-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      {pickLocalized(
+                        newsletterSection.title_fr,
+                        newsletterSection.title_ar,
+                        lang,
+                        pickLocalized(content?.newsletter_popup?.title_fr, content?.newsletter_popup?.title_ar, lang,
+                          lang === 'ar' ? 'اشترك في النشرة البريدية' : 'Inscrivez-vous à la Newsletter'),
+                      )}
+                    </h3>
+                  </div>
+                  <p className="text-gray-500 text-sm font-medium">
+                    {pickLocalized(
+                      newsletterSection.subtitle_fr,
+                      newsletterSection.subtitle_ar,
+                      lang,
+                      pickLocalized(content?.newsletter_popup?.description_fr, content?.newsletter_popup?.description_ar, lang,
+                        lang === 'ar' ? 'احصل على آخر العروض والمنتجات الجديدة' : 'Recevez nos offres et nouveautés en avant-première'),
+                    )}
+                  </p>
+                </div>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="email"
+                    placeholder={lang === 'ar' ? 'بريدك الإلكتروني…' : 'Entrer votre email…'}
+                    className="flex-1 md:w-64 px-4 py-3 rounded-2xl text-sm font-medium text-gray-700 outline-none transition-all border border-gray-200 bg-gray-50 focus:border-sky-300 focus:ring-2 focus:ring-sky-100 focus:bg-white"
+                    readOnly
+                  />
+                  <Link
+                    to={asText(newsletterSection.cta_link) || '#newsletter'}
+                    className="inline-flex items-center justify-center px-6 py-3 rounded-2xl text-sm font-black text-white whitespace-nowrap transition-all duration-200 hover:scale-[1.04] active:scale-[0.98] shadow-lg"
+                    style={{ background: 'linear-gradient(135deg,#E5252A,#c41e23)', boxShadow: '0 8px 24px rgba(229,37,42,0.35)' }}
+                  >
+                    {pickLocalized(
+                      newsletterSection.cta_fr,
+                      newsletterSection.cta_ar,
+                      lang,
+                      pickLocalized(content?.newsletter_popup?.button_text_fr, content?.newsletter_popup?.button_text_ar, lang,
+                        lang === 'ar' ? 'اشترك' : "S'inscrire"),
+                    )}
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+
         </section>
-      )}
+        {/* bottom padding */}
+        <div className="h-10" />
+      </div>
     </div>
   );
 }
