@@ -23,15 +23,12 @@ function CameraController({
 }) {
   const { camera } = useThree();
   const dummy = useRef(new THREE.Object3D());
-  const initialized = useRef(false);
-
   useEffect(() => {
-    if (!initialized.current) {
-      camera.position.set(targetPos.x, targetPos.y, targetPos.z);
-      camera.lookAt(targetLook);
-      initialized.current = true;
-    }
-  });
+    // Snap to starting position once on mount — no lerp on first frame
+    camera.position.set(targetPos.x, targetPos.y, targetPos.z);
+    camera.lookAt(targetLook);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useFrame(() => {
     camera.position.lerp(targetPos, 0.055);

@@ -1,10 +1,11 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { ArrowLeft, Globe, Volume2, VolumeX, Maximize2, Info } from 'lucide-react';
+import { ArrowLeft, Globe } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useLang } from '../../context/LanguageContext';
 import { ExperienceLoadingScreen } from './ExperienceLoadingScreen';
 import { ProductPanel, type HotspotData } from './ProductPanel';
+import { use3DConfig } from './use3DConfig';
 
 // Lazy-load the heavy 3D canvas — never blocks the rest of the site
 const Scene3D = lazy(() => import('./Scene3D'));
@@ -39,6 +40,7 @@ const DEFAULT_DESC_AR: Record<number, string> = {
 
 export function VirtualStore() {
   const { lang, setLang } = useLang();
+  const { config } = use3DConfig();                          // ← pull admin config
   const [appState, setAppState] = useState<'loading' | 'ready'>('loading');
   const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -139,6 +141,7 @@ export function VirtualStore() {
           hotspots={hotspots}
           lang={lang}
           onHotspotClick={handleHotspotClick}
+          config={config}
         />
       </Suspense>
 
@@ -208,17 +211,17 @@ export function VirtualStore() {
             backdropFilter: 'blur(10px)',
           }}
         >
-          <span className="hidden sm:flex items-center gap-1.5">
-            <kbd className="px-1.5 py-0.5 rounded text-[9px] border border-white/20 bg-white/5">🖱</kbd>
-            {lang === 'ar' ? 'اسحب للتدوير' : 'Glisser pour pivoter'}
-          </span>
-          <span className="w-px h-3 bg-white/15 hidden sm:block" />
           <span className="flex items-center gap-1.5">
-            <kbd className="px-1.5 py-0.5 rounded text-[9px] border border-white/20 bg-white/5">⊕</kbd>
-            {lang === 'ar' ? 'انقر على نقاط التفاعل' : 'Cliquer sur les hotspots'}
+            <kbd className="px-1.5 py-0.5 rounded text-[9px] border border-white/20 bg-white/5">⊙</kbd>
+            {lang === 'ar' ? 'انقر على الدوائر للتنقل' : 'Cliquer les cercles pour se déplacer'}
           </span>
           <span className="w-px h-3 bg-white/15" />
           <span className="flex items-center gap-1.5">
+            <kbd className="px-1.5 py-0.5 rounded text-[9px] border border-white/20 bg-white/5">⊕</kbd>
+            {lang === 'ar' ? 'انقر الدبابيس لعرض المنتجات' : 'Cliquer les épingles pour les produits'}
+          </span>
+          <span className="w-px h-3 bg-white/15 hidden sm:block" />
+          <span className="hidden sm:flex items-center gap-1.5">
             <kbd className="px-1.5 py-0.5 rounded text-[9px] border border-white/20 bg-white/5">📱</kbd>
             {lang === 'ar' ? 'اللمس مدعوم' : 'Touch supporté'}
           </span>
