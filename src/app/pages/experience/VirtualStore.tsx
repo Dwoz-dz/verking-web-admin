@@ -163,8 +163,8 @@ export function VirtualStore() {
 
         {/* Center: Brand title */}
         <div className="hidden sm:flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-          <span className="font-black text-sm text-white/70 tracking-tight">VERKING</span>
-          <span className="font-black text-sm tracking-tight" style={{ color: '#FFD700' }}>SCOLAIRE</span>
+          <span className="font-black text-sm text-white/80 tracking-tight">VERKING</span>
+          <span className="font-semibold text-xs tracking-[0.12em]" style={{ color: 'rgba(255,215,0,0.75)' }}>S.T.P Stationery</span>
           <span
             className="text-[9px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-full"
             style={{ background: 'rgba(229,37,42,0.3)', color: '#ff6b6b', border: '1px solid rgba(229,37,42,0.4)' }}

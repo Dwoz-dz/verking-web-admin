@@ -66,12 +66,10 @@ export function ExperienceLoadingScreen({ onEnter, dataReady }: Props) {
       <div className="relative z-10 flex flex-col items-center gap-6 text-center px-6">
         {/* Logo */}
         <div className="flex flex-col items-center gap-2">
-          <div
-            className="flex items-baseline gap-2 mb-1"
-            style={{ fontFamily: 'Montserrat, sans-serif' }}
-          >
+          {/* VERKING */}
+          <div style={{ fontFamily: 'Montserrat, sans-serif' }}>
             <span
-              className="font-black text-5xl md:text-7xl tracking-tight"
+              className="font-black text-5xl md:text-7xl tracking-tight block text-center"
               style={{
                 background: 'linear-gradient(135deg, #5baeff 0%, #2060d0 55%, #4499ff 100%)',
                 WebkitBackgroundClip: 'text',
@@ -82,21 +80,32 @@ export function ExperienceLoadingScreen({ onEnter, dataReady }: Props) {
             >
               VERKING
             </span>
+          </div>
+
+          {/* S.T.P Stationery subtitle */}
+          <div className="flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
             <span
-              className="font-black text-5xl md:text-7xl tracking-tight"
+              className="font-black text-lg md:text-2xl tracking-[0.18em]"
               style={{
                 background: 'linear-gradient(135deg, #FFD700 0%, #FFB300 60%, #FF8C00 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
-                filter: 'drop-shadow(0 0 30px rgba(255,180,0,0.5))',
+                filter: 'drop-shadow(0 0 16px rgba(255,180,0,0.5))',
               }}
             >
-              SCOLAIRE
+              S.T.P
+            </span>
+            <span className="w-px h-5 rounded-full bg-white/20" />
+            <span
+              className="font-semibold text-lg md:text-2xl tracking-[0.14em]"
+              style={{ color: 'rgba(255,255,255,0.55)' }}
+            >
+              Stationery
             </span>
           </div>
 
-          <div className="flex items-center gap-3 opacity-60">
+          <div className="flex items-center gap-3 opacity-60 mt-1">
             <div className="h-px w-12 bg-gradient-to-r from-transparent to-white/40" />
             <span className="text-white/60 text-xs font-bold tracking-[0.3em] uppercase">
               Virtual Showroom · 3D Experience

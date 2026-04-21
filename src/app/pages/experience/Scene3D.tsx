@@ -1,485 +1,575 @@
-import React, { useRef, useMemo, useState, Suspense } from 'react';
-import { Canvas, useFrame, extend } from '@react-three/fiber';
-import {
-  OrbitControls,
-  Html,
-  Text,
-  Sparkles,
-  Float,
-  Environment,
-  Stars,
-} from '@react-three/drei';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Html, Sparkles } from '@react-three/drei';
 import * as THREE from 'three';
+import { DEFAULT_CONFIG, type Config3D, type Waypoint } from './use3DConfig';
 import type { HotspotData } from './ProductPanel';
 
-// ─── Brand palette ─────────────────────────────────────────────────────────
-const BRAND = {
-  red: new THREE.Color('#E5252A'),
-  gold: new THREE.Color('#FFD700'),
-  navy: new THREE.Color('#1A3C6E'),
-  dark: new THREE.Color('#08090f'),
-  white: new THREE.Color('#ffffff'),
-};
+// ─── Props ────────────────────────────────────────────────────────────────────
+interface SceneProps {
+  hotspots: HotspotData[];
+  lang: 'fr' | 'ar';
+  onHotspotClick: (h: HotspotData) => void;
+  config?: Config3D;
+}
 
-// ─── Floor ─────────────────────────────────────────────────────────────────
-function Floor() {
+// ─── Camera controller (first-person smooth lerp) ────────────────────────────
+function CameraController({
+  targetPos,
+  targetLook,
+}: {
+  targetPos: THREE.Vector3;
+  targetLook: THREE.Vector3;
+}) {
+  const { camera } = useThree();
+  const dummy = useRef(new THREE.Object3D());
+  const initialized = useRef(false);
+
+  useEffect(() => {
+    if (!initialized.current) {
+      camera.position.set(targetPos.x, targetPos.y, targetPos.z);
+      camera.lookAt(targetLook);
+      initialized.current = true;
+    }
+  });
+
+  useFrame(() => {
+    camera.position.lerp(targetPos, 0.055);
+    dummy.current.position.copy(camera.position);
+    dummy.current.lookAt(targetLook);
+    camera.quaternion.slerp(dummy.current.quaternion, 0.055);
+  });
+
+  return null;
+}
+
+// ─── Floor ───────────────────────────────────────────────────────────────────
+function StoreFloor({ color }: { color: string }) {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-      <planeGeometry args={[30, 26]} />
-      <meshStandardMaterial
-        color="#080a12"
-        roughness={0.15}
-        metalness={0.8}
-        envMapIntensity={1.2}
-      />
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+      <planeGeometry args={[28, 26]} />
+      <meshStandardMaterial color={color} roughness={0.25} metalness={0.6} />
     </mesh>
   );
 }
 
-// ─── Grid overlay on floor ─────────────────────────────────────────────────
 function FloorGrid() {
-  return (
-    <gridHelper
-      args={[30, 30, '#1a2040', '#0e1428']}
-      position={[0, 0.001, 0]}
-    />
-  );
+  return <gridHelper args={[28, 28, '#1e2240', '#1e2240']} position={[0, 0.01, 0]} />;
 }
 
-// ─── Back wall with brand text ─────────────────────────────────────────────
-function BackWall() {
-  return (
-    <group position={[0, 3.5, -12]}>
-      {/* Wall face */}
-      <mesh receiveShadow>
-        <planeGeometry args={[28, 8]} />
-        <meshStandardMaterial color="#050710" roughness={0.9} metalness={0.1} />
-      </mesh>
-
-      {/* Accent strip top */}
-      <mesh position={[0, 3.8, 0.01]}>
-        <planeGeometry args={[28, 0.06]} />
-        <meshStandardMaterial color={BRAND.red} emissive={BRAND.red} emissiveIntensity={3} />
-      </mesh>
-
-      {/* Accent strip bottom */}
-      <mesh position={[0, -3.8, 0.01]}>
-        <planeGeometry args={[28, 0.06]} />
-        <meshStandardMaterial color={BRAND.gold} emissive={BRAND.gold} emissiveIntensity={3} />
-      </mesh>
-
-      {/* Brand name — using drei's built-in default font */}
-      <Text
-        position={[-2, 0.8, 0.05]}
-        fontSize={1.4}
-        color="#ffffff"
-        anchorX="center"
-        anchorY="middle"
-        letterSpacing={0.08}
-        maxWidth={20}
-      >
-        VERKING
-      </Text>
-      <Text
-        position={[3.2, 0.8, 0.05]}
-        fontSize={1.4}
-        color="#FFD700"
-        anchorX="center"
-        anchorY="middle"
-        letterSpacing={0.08}
-        maxWidth={20}
-      >
-        SCOLAIRE
-      </Text>
-      <Text
-        position={[0, -0.6, 0.05]}
-        fontSize={0.28}
-        color="#ffffff"
-        fillOpacity={0.35}
-        anchorX="center"
-        anchorY="middle"
-        letterSpacing={0.32}
-        maxWidth={20}
-      >
-        S.T.P · PREMIUM STATIONERY · VIRTUAL SHOWROOM
-      </Text>
-    </group>
-  );
-}
-
-// ─── Side walls ────────────────────────────────────────────────────────────
-function SideWalls() {
+// ─── Walls + ceiling ─────────────────────────────────────────────────────────
+function StoreWalls({ wallColor }: { wallColor: string }) {
+  const mat = <meshStandardMaterial color={wallColor} roughness={0.85} metalness={0.05} />;
   return (
     <>
-      {/* Left wall */}
-      <mesh position={[-14, 3.5, -6]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[26, 8]} />
-        <meshStandardMaterial color="#050710" roughness={0.9} metalness={0.05} />
-      </mesh>
-      {/* Right wall */}
-      <mesh position={[14, 3.5, -6]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[26, 8]} />
-        <meshStandardMaterial color="#050710" roughness={0.9} metalness={0.05} />
-      </mesh>
+      <mesh position={[0, 5, -13]} receiveShadow><boxGeometry args={[28, 10, 0.3]} />{mat}</mesh>
+      <mesh position={[0, 5, 13]} receiveShadow><boxGeometry args={[28, 10, 0.3]} />{mat}</mesh>
+      <mesh position={[-14, 5, 0]} receiveShadow><boxGeometry args={[0.3, 10, 26]} />{mat}</mesh>
+      <mesh position={[14, 5, 0]} receiveShadow><boxGeometry args={[0.3, 10, 26]} />{mat}</mesh>
+      <mesh position={[0, 10, 0]} receiveShadow><boxGeometry args={[28, 0.3, 26]} />{mat}</mesh>
     </>
   );
 }
 
-// ─── Ceiling ───────────────────────────────────────────────────────────────
-function Ceiling() {
+// ─── Ceiling lights ───────────────────────────────────────────────────────────
+function CeilingLights() {
+  const positions: [number, number, number][] = [
+    [-8, 9.7, -5], [0, 9.7, -5], [8, 9.7, -5],
+    [-8, 9.7, 2],  [0, 9.7, 2],  [8, 9.7, 2],
+    [-8, 9.7, 8],  [0, 9.7, 8],  [8, 9.7, 8],
+  ];
   return (
     <>
-      <mesh position={[0, 7, -6]} rotation={[Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[30, 26]} />
-        <meshStandardMaterial color="#030408" roughness={1} />
-      </mesh>
-      {/* Strip lights */}
-      {[-8, 0, 8].map((x) => (
-        <mesh key={x} position={[x, 6.96, -6]}>
-          <boxGeometry args={[0.2, 0.04, 20]} />
-          <meshStandardMaterial
-            color="#ffffff"
-            emissive={new THREE.Color('#cce8ff')}
-            emissiveIntensity={4}
-          />
-        </mesh>
+      {positions.map((pos, i) => (
+        <group key={i} position={pos}>
+          <mesh>
+            <boxGeometry args={[3.5, 0.08, 0.3]} />
+            <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={1.2} />
+          </mesh>
+          <pointLight position={[0, -0.5, 0]} intensity={1.1} distance={7} color="#f0f4ff" />
+        </group>
       ))}
     </>
   );
 }
 
-// ─── Animated ring hotspot marker ─────────────────────────────────────────
-function HotspotRing({ color, onClick, label, lang }: {
-  color: string;
-  onClick: () => void;
-  label: string;
-  lang: 'fr' | 'ar';
+// ─── Shelf unit ───────────────────────────────────────────────────────────────
+function ShelfUnit({
+  position,
+  rotation = 0,
+  color = '#E5252A',
+}: {
+  position: [number, number, number];
+  rotation?: number;
+  color?: string;
 }) {
-  const ringRef = useRef<THREE.Mesh>(null!);
-  const ring2Ref = useRef<THREE.Mesh>(null!);
-
-  useFrame((state) => {
-    const t = state.clock.elapsedTime;
-    if (ringRef.current) {
-      ringRef.current.rotation.z = t * 0.8;
-      ringRef.current.scale.setScalar(1 + Math.sin(t * 2) * 0.06);
-    }
-    if (ring2Ref.current) {
-      ring2Ref.current.rotation.z = -t * 0.5;
-      ring2Ref.current.scale.setScalar(1 + Math.cos(t * 2) * 0.05);
-    }
-  });
-
-  const threeColor = new THREE.Color(color);
-
+  const dark = '#2a1f14';
   return (
-    <group>
-      {/* Outer ring */}
-      <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.38, 0.48, 48]} />
-        <meshStandardMaterial
-          color={threeColor}
-          emissive={threeColor}
-          emissiveIntensity={3}
-          transparent
-          opacity={0.9}
-          side={THREE.DoubleSide}
-        />
+    <group position={position} rotation={[0, rotation, 0]}>
+      <mesh position={[0, 2.5, -0.38]}>
+        <boxGeometry args={[2.4, 5, 0.06]} />
+        <meshStandardMaterial color={dark} roughness={0.9} />
       </mesh>
-      {/* Inner ring */}
-      <mesh ref={ring2Ref} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.24, 0.3, 48]} />
-        <meshStandardMaterial
-          color={threeColor}
-          emissive={threeColor}
-          emissiveIntensity={2}
-          transparent
-          opacity={0.6}
-          side={THREE.DoubleSide}
-        />
+      {([-1.17, 1.17] as number[]).map((x, i) => (
+        <mesh key={i} position={[x, 2.5, 0]}>
+          <boxGeometry args={[0.06, 5, 0.8]} />
+          <meshStandardMaterial color={dark} roughness={0.9} />
+        </mesh>
+      ))}
+      {([1.0, 2.0, 3.0, 4.0] as number[]).map((y, i) => (
+        <mesh key={i} position={[0, y, 0]}>
+          <boxGeometry args={[2.34, 0.06, 0.8]} />
+          <meshStandardMaterial color={dark} roughness={0.8} metalness={0.1} />
+        </mesh>
+      ))}
+      <mesh position={[0, 5, 0]}>
+        <boxGeometry args={[2.4, 0.08, 0.86]} />
+        <meshStandardMaterial color={dark} roughness={0.8} />
       </mesh>
+      <mesh position={[0, 5.1, -0.35]}>
+        <boxGeometry args={[2.4, 0.06, 0.1]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} />
+      </mesh>
+    </group>
+  );
+}
 
-      {/* HTML label */}
-      <Html
-        position={[0, 0.6, 0]}
-        center
-        zIndexRange={[1, 10]}
-        distanceFactor={8}
-      >
-        <button
-          onClick={onClick}
-          className="group relative flex items-center gap-2 px-4 py-2 rounded-full font-black text-xs uppercase tracking-widest whitespace-nowrap cursor-pointer"
-          style={{
-            background: `linear-gradient(135deg, ${color}cc, ${color}88)`,
-            border: `1px solid ${color}`,
-            color: color === '#FFD700' || color === '#FFC107' ? '#111' : '#fff',
-            boxShadow: `0 4px 20px ${color}50`,
-            backdropFilter: 'blur(6px)',
-            WebkitBackdropFilter: 'blur(6px)',
-            transition: 'all 0.2s ease',
-            pointerEvents: 'auto',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.12)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
-        >
-          <span style={{ fontSize: 14 }}>+</span>
-          {label}
-        </button>
+// ─── Backpack hanging display ─────────────────────────────────────────────────
+function BackpackDisplay({ position, color }: { position: [number, number, number]; color: string }) {
+  return (
+    <group position={position}>
+      <mesh position={[0, 4.8, 0]}>
+        <cylinderGeometry args={[0.03, 0.03, 2.4, 8]} />
+        <meshStandardMaterial color="#888" metalness={0.9} roughness={0.1} />
+      </mesh>
+      {([-0.7, 0, 0.7] as number[]).map((x, i) => (
+        <group key={i} position={[x, 3.6, 0]}>
+          <mesh>
+            <boxGeometry args={[0.38, 0.55, 0.18]} />
+            <meshStandardMaterial color={[color, '#1D4ED8', '#10B981'][i % 3]} roughness={0.7} />
+          </mesh>
+          <mesh position={[0, 0.3, 0]}>
+            <cylinderGeometry args={[0.025, 0.025, 0.22, 6]} />
+            <meshStandardMaterial color="#555" metalness={0.7} roughness={0.3} />
+          </mesh>
+          <mesh position={[0, -0.1, 0.1]}>
+            <boxGeometry args={[0.28, 0.28, 0.05]} />
+            <meshStandardMaterial color={[color, '#1D4ED8', '#10B981'][i % 3]} roughness={0.8} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// ─── Pencil case table ────────────────────────────────────────────────────────
+function TrousseDisplay({ position, color }: { position: [number, number, number]; color: string }) {
+  return (
+    <group position={position}>
+      <mesh position={[0, 1.0, 0]}>
+        <boxGeometry args={[2.2, 0.06, 0.8]} />
+        <meshStandardMaterial color="#1a1a2e" roughness={0.4} metalness={0.3} />
+      </mesh>
+      {([-0.95, 0.95] as number[]).flatMap((x, i) =>
+        ([-0.3, 0.3] as number[]).map((z, j) => (
+          <mesh key={`${i}-${j}`} position={[x, 0.5, z]}>
+            <cylinderGeometry args={[0.03, 0.03, 1.0, 6]} />
+            <meshStandardMaterial color="#333" metalness={0.8} roughness={0.2} />
+          </mesh>
+        ))
+      )}
+      {([-0.7, 0, 0.7] as number[]).map((x, i) => (
+        <mesh key={i} position={[x, 1.1, 0]}>
+          <boxGeometry args={[0.3, 0.12, 0.55]} />
+          <meshStandardMaterial color={[color, '#8B5CF6', '#F97316'][i % 3]} roughness={0.6} />
+        </mesh>
+      ))}
+      <mesh position={[0, 1.55, -0.25]}>
+        <boxGeometry args={[2.0, 0.9, 0.05]} />
+        <meshStandardMaterial color="#111" roughness={0.7} />
+      </mesh>
+      <mesh position={[0, 1.08, 0.42]}>
+        <boxGeometry args={[2.2, 0.04, 0.06]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.6} />
+      </mesh>
+    </group>
+  );
+}
+
+// ─── Brand back wall ──────────────────────────────────────────────────────────
+function BrandBackWall({ title, subtitle, primaryColor, secondaryColor }: {
+  title: string; subtitle: string; primaryColor: string; secondaryColor: string;
+}) {
+  return (
+    <group position={[0, 0, -12.5]}>
+      <mesh position={[0, 5.5, 0.16]}>
+        <boxGeometry args={[10, 4.5, 0.1]} />
+        <meshStandardMaterial color="#0d0f1c" roughness={0.5} />
+      </mesh>
+      <mesh position={[0, 3.1, 0.2]}>
+        <boxGeometry args={[10, 0.08, 0.1]} />
+        <meshStandardMaterial color={primaryColor} emissive={primaryColor} emissiveIntensity={1.5} />
+      </mesh>
+      <mesh position={[0, 7.9, 0.2]}>
+        <boxGeometry args={[10, 0.08, 0.1]} />
+        <meshStandardMaterial color={secondaryColor} emissive={secondaryColor} emissiveIntensity={1.5} />
+      </mesh>
+      <Html position={[0, 5.5, 0.35]} center distanceFactor={10} style={{ pointerEvents: 'none' }}>
+        <div style={{ fontFamily: 'Montserrat, sans-serif', textAlign: 'center', userSelect: 'none' }}>
+          <div style={{
+            fontSize: 52, fontWeight: 900, letterSpacing: -1,
+            background: 'linear-gradient(135deg,#5baeff 0%,#2060d0 55%,#4499ff 100%)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+            filter: 'drop-shadow(0 0 20px rgba(80,150,255,0.6))', lineHeight: 1.05,
+          }}>{title}</div>
+          <div style={{
+            fontSize: 18, fontWeight: 600, letterSpacing: 4,
+            color: 'rgba(255,215,0,0.85)', marginTop: 6, textTransform: 'uppercase',
+            filter: 'drop-shadow(0 0 12px rgba(255,180,0,0.5))',
+          }}>{subtitle}</div>
+        </div>
+      </Html>
+      {([-4.8, 4.8] as number[]).map((x, i) => (
+        <mesh key={i} position={[x, 5, 0.18]}>
+          <boxGeometry args={[0.12, 6, 0.12]} />
+          <meshStandardMaterial
+            color={i === 0 ? primaryColor : secondaryColor}
+            emissive={i === 0 ? primaryColor : secondaryColor}
+            emissiveIntensity={0.8}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// ─── Center island ────────────────────────────────────────────────────────────
+function CenterIsland({ color }: { color: string }) {
+  return (
+    <group position={[0, 0, -1]}>
+      <mesh position={[0, 0.7, 0]}>
+        <boxGeometry args={[3.5, 1.4, 1.4]} />
+        <meshStandardMaterial color="#16182a" roughness={0.5} metalness={0.2} />
+      </mesh>
+      <mesh position={[0, 1.44, 0]}>
+        <boxGeometry args={[3.5, 0.08, 1.4]} />
+        <meshStandardMaterial color="#88aaff" transparent opacity={0.18} roughness={0.05} metalness={0.9} />
+      </mesh>
+      {([-1, 0, 1] as number[]).map((x, i) => (
+        <mesh key={i} position={[x * 1.0, 1.2, 0]}>
+          <boxGeometry args={[0.22, 0.22, 0.35]} />
+          <meshStandardMaterial color={[color, '#FFD700', '#8B5CF6'][i % 3]} roughness={0.5} />
+        </mesh>
+      ))}
+      <mesh position={[0, 1.45, 0.72]}>
+        <boxGeometry args={[3.5, 0.04, 0.04]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} />
+      </mesh>
+      <pointLight position={[0, 1.6, 0]} intensity={0.6} distance={3} color="#d0ddff" />
+    </group>
+  );
+}
+
+// ─── Entrance arch ────────────────────────────────────────────────────────────
+function EntranceArch({ color }: { color: string }) {
+  return (
+    <group position={[0, 0, 12]}>
+      {([-3.5, 3.5] as number[]).map((x, i) => (
+        <mesh key={i} position={[x, 3.5, 0]}>
+          <boxGeometry args={[0.35, 7, 0.35]} />
+          <meshStandardMaterial color="#1a1c2e" roughness={0.6} />
+        </mesh>
+      ))}
+      <mesh position={[0, 7.2, 0]}>
+        <boxGeometry args={[7.35, 0.3, 0.35]} />
+        <meshStandardMaterial color="#1a1c2e" roughness={0.6} />
+      </mesh>
+      <mesh position={[0, 7.38, 0]}>
+        <boxGeometry args={[7.35, 0.07, 0.07]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={2} />
+      </mesh>
+    </group>
+  );
+}
+
+// ─── Section sign ─────────────────────────────────────────────────────────────
+function SectionSign({ position, label, color, rotation = 0 }: {
+  position: [number, number, number]; label: string; color: string; rotation?: number;
+}) {
+  return (
+    <group position={position} rotation={[0, rotation, 0]}>
+      <mesh>
+        <boxGeometry args={[1.8, 0.45, 0.08]} />
+        <meshStandardMaterial color="#0d0f1c" roughness={0.6} />
+      </mesh>
+      <mesh position={[0, 0.26, 0]}>
+        <boxGeometry args={[1.8, 0.06, 0.09]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.5} />
+      </mesh>
+      <Html position={[0, 0, 0.06]} center distanceFactor={5} style={{ pointerEvents: 'none' }}>
+        <div style={{
+          color: '#fff', fontSize: 11, fontWeight: 800,
+          fontFamily: 'Montserrat, sans-serif', letterSpacing: 2,
+          textTransform: 'uppercase', textShadow: `0 0 12px ${color}`, whiteSpace: 'nowrap',
+        }}>{label}</div>
       </Html>
     </group>
   );
 }
 
-// ─── Floating product shape ────────────────────────────────────────────────
-function FloatingShape({ shapeIndex, color }: { shapeIndex: number; color: string }) {
-  const meshRef = useRef<THREE.Mesh>(null!);
-  const threeColor = new THREE.Color(color);
-
-  useFrame((state) => {
-    const t = state.clock.elapsedTime;
-    if (meshRef.current) {
-      meshRef.current.rotation.y = t * 0.5 + shapeIndex;
-      meshRef.current.rotation.x = Math.sin(t * 0.3 + shapeIndex) * 0.2;
-      meshRef.current.position.y = Math.sin(t * 0.8 + shapeIndex * 1.5) * 0.12;
-    }
-  });
-
-  const shapes = [
-    <icosahedronGeometry args={[0.5, 1]} />,
-    <boxGeometry args={[0.65, 0.65, 0.65]} />,
-    <octahedronGeometry args={[0.55, 0]} />,
-    <dodecahedronGeometry args={[0.48, 0]} />,
-    <tetrahedronGeometry args={[0.6, 0]} />,
-    <torusGeometry args={[0.38, 0.14, 16, 48]} />,
-  ];
-
+// ─── Aisle divider ────────────────────────────────────────────────────────────
+function AisleDivider({ x, color }: { x: number; color: string }) {
   return (
-    <mesh ref={meshRef} castShadow>
-      {shapes[shapeIndex % shapes.length]}
-      <meshStandardMaterial
-        color={threeColor}
-        emissive={threeColor}
-        emissiveIntensity={0.6}
-        roughness={0.2}
-        metalness={0.7}
-        envMapIntensity={1.5}
-      />
-    </mesh>
-  );
-}
-
-// ─── Pedestal + shape + hotspot ───────────────────────────────────────────
-function CategoryDisplay({
-  position,
-  hotspot,
-  shapeIndex,
-  lang,
-  onHotspotClick,
-}: {
-  position: [number, number, number];
-  hotspot: HotspotData;
-  shapeIndex: number;
-  lang: 'fr' | 'ar';
-  onHotspotClick: (h: HotspotData) => void;
-}) {
-  const label = lang === 'ar' ? hotspot.label_ar : hotspot.label_fr;
-  const color = hotspot.color;
-  const threeColor = new THREE.Color(color);
-
-  return (
-    <group position={position}>
-      {/* Glow disc on floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-        <circleGeometry args={[1.2, 64]} />
-        <meshStandardMaterial
-          color={threeColor}
-          emissive={threeColor}
-          emissiveIntensity={0.4}
-          transparent
-          opacity={0.18}
-          side={THREE.DoubleSide}
-        />
+    <group position={[x, 0, 0]}>
+      <mesh position={[0, 0.5, 0]}>
+        <boxGeometry args={[0.12, 1.0, 16]} />
+        <meshStandardMaterial color="#16182a" roughness={0.7} />
       </mesh>
-
-      {/* Pedestal base disc */}
-      <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.6, 64]} />
-        <meshStandardMaterial
-          color={threeColor}
-          emissive={threeColor}
-          emissiveIntensity={1.5}
-          transparent
-          opacity={0.7}
-        />
+      <mesh position={[0, 1.04, 0]}>
+        <boxGeometry args={[0.08, 0.04, 16]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} />
       </mesh>
-
-      {/* Pedestal cylinder */}
-      <mesh position={[0, 0.35, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.42, 0.54, 0.7, 32]} />
-        <meshStandardMaterial
-          color="#0d1020"
-          roughness={0.3}
-          metalness={0.9}
-          envMapIntensity={1}
-        />
-      </mesh>
-
-      {/* Pedestal top cap with color accent */}
-      <mesh position={[0, 0.72, 0]}>
-        <cylinderGeometry args={[0.44, 0.44, 0.04, 32]} />
-        <meshStandardMaterial
-          color={threeColor}
-          emissive={threeColor}
-          emissiveIntensity={2}
-        />
-      </mesh>
-
-      {/* Floating shape */}
-      <group position={[0, 1.5, 0]}>
-        <FloatingShape shapeIndex={shapeIndex} color={color} />
-      </group>
-
-      {/* Hotspot ring + label (slightly above shape) */}
-      <group position={[0, 2.4, 0]}>
-        <HotspotRing
-          color={color}
-          label={`${hotspot.emoji} ${label}`}
-          lang={lang}
-          onClick={() => onHotspotClick(hotspot)}
-        />
-      </group>
-
-      {/* Point light for glow effect */}
-      <pointLight
-        position={[0, 1.5, 0]}
-        color={threeColor}
-        intensity={1.5}
-        distance={4}
-        decay={2}
-      />
     </group>
   );
 }
 
-// ─── Main 3D scene content ─────────────────────────────────────────────────
-function ShowroomScene({
-  hotspots,
-  lang,
-  onHotspotClick,
-}: {
-  hotspots: HotspotData[];
-  lang: 'fr' | 'ar';
-  onHotspotClick: (h: HotspotData) => void;
+// ─── Floor navigation dot ─────────────────────────────────────────────────────
+function FloorDot({ waypoint, lang, isActive, onClick, primaryColor }: {
+  waypoint: Waypoint; lang: 'fr' | 'ar'; isActive: boolean; onClick: () => void; primaryColor: string;
 }) {
-  // Place up to 6 pedestals in a gentle arc
-  const pedesatalPositions: [number, number, number][] = useMemo(() => {
-    const count = Math.min(hotspots.length, 6);
-    if (count === 0) return [];
-    const positions: [number, number, number][] = [];
-    // Two rows: front row (z=-3) and back row (z=-7)
-    const configs = [
-      [-5, 0, -4], [0, 0, -6], [5, 0, -4],
-      [-5, 0, -9], [0, 0, -10], [5, 0, -9],
-    ] as [number, number, number][];
-    for (let i = 0; i < count; i++) {
-      positions.push(configs[i]);
+  const ringRef = useRef<THREE.Mesh>(null);
+  const ring2Ref = useRef<THREE.Mesh>(null);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    if (ringRef.current) {
+      const s = 1 + Math.sin(t * 2.5) * 0.12;
+      ringRef.current.scale.set(s, 1, s);
+      (ringRef.current.material as THREE.MeshStandardMaterial).opacity = 0.35 + Math.sin(t * 2.5) * 0.25;
     }
-    return positions;
-  }, [hotspots.length]);
+    if (ring2Ref.current) {
+      const s2 = 1 + Math.sin(t * 2.5 + 1) * 0.18;
+      ring2Ref.current.scale.set(s2, 1, s2);
+      (ring2Ref.current.material as THREE.MeshStandardMaterial).opacity = 0.2 + Math.sin(t * 2.5 + 1) * 0.2;
+    }
+  });
+
+  const color = isActive ? '#ffffff' : primaryColor;
+
+  return (
+    <group position={[waypoint.position[0], 0.02, waypoint.position[2]]}>
+      <mesh ref={ring2Ref} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.55, 0.7, 32]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.8}
+          transparent opacity={0.25} depthWrite={false} />
+      </mesh>
+      <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.28, 0.45, 32]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2}
+          transparent opacity={0.5} depthWrite={false} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.2, 24]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={2}
+          transparent opacity={0.9} depthWrite={false} />
+      </mesh>
+      <Html position={[0, 0.18, 0]} center distanceFactor={9} style={{ pointerEvents: 'auto' }}>
+        <div onClick={onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, cursor: 'pointer', userSelect: 'none' }}>
+          <div style={{ position: 'absolute', width: 90, height: 90, borderRadius: '50%', top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }} />
+          <div style={{
+            background: isActive ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.6)',
+            border: `1px solid ${color}55`, borderRadius: 20, padding: '3px 10px',
+            fontSize: 10, fontWeight: 800, fontFamily: 'Montserrat, sans-serif',
+            color: isActive ? '#fff' : 'rgba(255,255,255,0.7)', letterSpacing: '1.5px',
+            textTransform: 'uppercase', whiteSpace: 'nowrap', backdropFilter: 'blur(6px)',
+            boxShadow: isActive ? `0 0 12px ${primaryColor}60` : 'none', marginTop: 8,
+          }}>
+            {lang === 'ar' ? waypoint.label_ar : waypoint.label_fr}
+          </div>
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+// ─── Hotspot pin ──────────────────────────────────────────────────────────────
+function HotspotPin({ hotspot, position, lang, onClick }: {
+  hotspot: HotspotData; position: [number, number, number]; lang: 'fr' | 'ar'; onClick: () => void;
+}) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const baseY = position[1];
+
+  useFrame(({ clock }) => {
+    if (meshRef.current) {
+      meshRef.current.position.y = baseY + Math.sin(clock.getElapsedTime() * 1.8) * 0.1;
+    }
+  });
+
+  const label = lang === 'ar' ? hotspot.label_ar : hotspot.label_fr;
+
+  return (
+    <group position={[position[0], 0, position[2]]}>
+      <mesh position={[0, position[1] - 0.5, 0]}>
+        <cylinderGeometry args={[0.03, 0.03, 1.0, 8]} />
+        <meshStandardMaterial color={hotspot.color} emissive={hotspot.color} emissiveIntensity={0.6} transparent opacity={0.7} />
+      </mesh>
+      <mesh ref={meshRef} position={[0, baseY, 0]}>
+        <sphereGeometry args={[0.22, 16, 16]} />
+        <meshStandardMaterial color={hotspot.color} emissive={hotspot.color} emissiveIntensity={0.9} roughness={0.2} metalness={0.3} />
+      </mesh>
+      <Html position={[0, baseY + 0.55, 0]} center distanceFactor={7}>
+        <div onClick={onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none' }}>
+          <div style={{ fontSize: 22, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.6))' }}>{hotspot.emoji}</div>
+          <div style={{
+            background: `${hotspot.color}dd`, borderRadius: 16, padding: '3px 10px',
+            fontSize: 10, fontWeight: 800, fontFamily: 'Montserrat, sans-serif',
+            color: hotspot.color === '#FFD700' ? '#111' : '#fff', letterSpacing: 1,
+            textTransform: 'uppercase', whiteSpace: 'nowrap', boxShadow: `0 4px 16px ${hotspot.color}60`,
+          }}>{label}</div>
+        </div>
+      </Html>
+      <pointLight position={[0, baseY, 0]} intensity={0.5} distance={2.5} color={hotspot.color} />
+    </group>
+  );
+}
+
+// ─── Hotspot positions inside the store ───────────────────────────────────────
+const HOTSPOT_POSITIONS: [number, number, number][] = [
+  [-10, 2.6, 2],
+  [10, 2.6, 2],
+  [0, 2.6, -1],
+  [-5, 2.6, -5],
+  [5, 2.6, -5],
+  [0, 2.6, 7],
+];
+
+// ─── Full showroom scene ──────────────────────────────────────────────────────
+function ShowroomScene({
+  hotspots, lang, onHotspotClick, config, activeWaypointId, onWaypointClick,
+}: {
+  hotspots: HotspotData[]; lang: 'fr' | 'ar'; onHotspotClick: (h: HotspotData) => void;
+  config: Config3D; activeWaypointId: string; onWaypointClick: (w: Waypoint) => void;
+}) {
+  const labelCartables = lang === 'ar' ? config.section_label_cartables_ar : config.section_label_cartables_fr;
+  const labelTrousses = lang === 'ar' ? config.section_label_trousses_ar : config.section_label_trousses_fr;
 
   return (
     <>
-      {/* Lights */}
-      <ambientLight intensity={0.25} color="#1a2040" />
-      <directionalLight
-        position={[0, 10, 5]}
-        intensity={0.6}
-        color="#c8d8ff"
-        castShadow
-        shadow-mapSize={[2048, 2048]}
-      />
-      {/* Brand accent lights */}
-      <pointLight position={[-12, 4, -4]} color={BRAND.red} intensity={2} distance={14} decay={2} />
-      <pointLight position={[12, 4, -4]} color={BRAND.gold} intensity={2} distance={14} decay={2} />
-      <pointLight position={[0, 5, 0]} color="#6080ff" intensity={1} distance={12} decay={2} />
+      <fog attach="fog" args={[config.fog_color, config.fog_near, config.fog_far]} />
+      <ambientLight intensity={config.ambient_intensity} color="#c8d4ff" />
+      <directionalLight position={[0, 9, 5]} intensity={0.4} color="#ffffff" castShadow />
 
-      {/* Environment */}
-      <fog attach="fog" args={['#06080f', 14, 28]} />
-      <Stars radius={40} depth={20} count={800} factor={3} saturation={0.3} fade speed={0.3} />
-      <Sparkles
-        count={80}
-        scale={[22, 7, 18]}
-        position={[0, 3, -5]}
-        size={1.5}
-        speed={0.3}
-        opacity={0.4}
-        color="#8cb4ff"
-      />
+      {config.show_particles && (
+        <Sparkles count={60} scale={[20, 8, 20]} position={[0, 5, 0]} size={1.2} speed={0.2} color="#88aaff" opacity={0.4} />
+      )}
 
-      {/* Room geometry */}
-      <Floor />
+      <StoreFloor color={config.floor_color} />
       <FloorGrid />
-      <BackWall />
-      <SideWalls />
-      <Ceiling />
+      <StoreWalls wallColor={config.wall_color} />
+      <CeilingLights />
+      <EntranceArch color={config.primary_color} />
+      <BrandBackWall
+        title={config.brand_title}
+        subtitle={config.brand_subtitle}
+        primaryColor={config.primary_color}
+        secondaryColor={config.secondary_color}
+      />
 
-      {/* Category displays */}
-      {hotspots.slice(0, 6).map((hotspot, i) => (
-        <CategoryDisplay
-          key={hotspot.id}
-          position={pedesatalPositions[i] || [0, 0, -5]}
-          hotspot={hotspot}
-          shapeIndex={i}
+      <AisleDivider x={-3.8} color={config.primary_color} />
+      <AisleDivider x={3.8} color={config.secondary_color} />
+
+      {/* LEFT — Cartables */}
+      <>
+        <SectionSign position={[-9, 7, 2]} label={labelCartables} color={config.primary_color} rotation={Math.PI / 16} />
+        <ShelfUnit position={[-12.5, 0, -7]} color={config.primary_color} />
+        <ShelfUnit position={[-12.5, 0, -2]} color={config.primary_color} />
+        <ShelfUnit position={[-12.5, 0, 3]} color={config.primary_color} />
+        <ShelfUnit position={[-12.5, 0, 8]} color={config.primary_color} />
+        <BackpackDisplay position={[-10, 0, 0]} color={config.primary_color} />
+        <BackpackDisplay position={[-10, 0, 5]} color={config.primary_color} />
+        <pointLight position={[-10, 6, 2]} intensity={0.8} distance={8} color="#ff8888" />
+      </>
+
+      {/* RIGHT — Trousses */}
+      <>
+        <SectionSign position={[9, 7, 2]} label={labelTrousses} color={config.secondary_color} rotation={-Math.PI / 16} />
+        <ShelfUnit position={[12.5, 0, -7]} color={config.secondary_color} />
+        <ShelfUnit position={[12.5, 0, -2]} color={config.secondary_color} />
+        <ShelfUnit position={[12.5, 0, 3]} color={config.secondary_color} />
+        <ShelfUnit position={[12.5, 0, 8]} color={config.secondary_color} />
+        <TrousseDisplay position={[10, 0, 1]} color={config.secondary_color} />
+        <TrousseDisplay position={[10, 0, 5.5]} color={config.secondary_color} />
+        <pointLight position={[10, 6, 2]} intensity={0.8} distance={8} color="#ffe066" />
+      </>
+
+      <CenterIsland color={config.accent_color} />
+      <pointLight position={[0, 3, -1]} intensity={0.6} distance={5} color="#aaccff" />
+
+      {hotspots.slice(0, 6).map((h, i) => (
+        <HotspotPin
+          key={h.id}
+          hotspot={h}
+          position={HOTSPOT_POSITIONS[i] ?? [0, 2.6, 0]}
           lang={lang}
-          onHotspotClick={onHotspotClick}
+          onClick={() => onHotspotClick(h)}
         />
       ))}
 
-      {/* Camera controls */}
-      <OrbitControls
-        target={[0, 1.5, -5]}
-        enablePan={false}
-        minDistance={3}
-        maxDistance={14}
-        minPolarAngle={Math.PI / 6}
-        maxPolarAngle={Math.PI / 2.1}
-        autoRotate
-        autoRotateSpeed={0.4}
-        dampingFactor={0.06}
-        enableDamping
-      />
+      {config.waypoints.map((wp) => (
+        <FloorDot
+          key={wp.id}
+          waypoint={wp}
+          lang={lang}
+          isActive={wp.id === activeWaypointId}
+          onClick={() => onWaypointClick(wp)}
+          primaryColor={config.primary_color}
+        />
+      ))}
     </>
   );
 }
 
-// ─── Canvas wrapper (exported) ─────────────────────────────────────────────
-interface SceneProps {
-  hotspots: HotspotData[];
-  lang: 'fr' | 'ar';
-  onHotspotClick: (h: HotspotData) => void;
-}
+// ─── Default export ───────────────────────────────────────────────────────────
+export default function Scene3D({ hotspots, lang, onHotspotClick, config: configProp }: SceneProps) {
+  const config = configProp ?? DEFAULT_CONFIG;
 
-export default function Scene3D({ hotspots, lang, onHotspotClick }: SceneProps) {
+  const initialWp = config.waypoints[0] ?? { id: 'entrance', position: [0, 1.7, 9] as [number,number,number], lookAt: [0, 1.5, 0] as [number,number,number] };
+
+  const [activeWaypointId, setActiveWaypointId] = useState(initialWp.id);
+  const [targetPos, setTargetPos] = useState<THREE.Vector3>(
+    () => new THREE.Vector3(...initialWp.position),
+  );
+  const [targetLook, setTargetLook] = useState<THREE.Vector3>(
+    () => new THREE.Vector3(...(initialWp as Waypoint).lookAt ?? [0, 1.5, 0]),
+  );
+
+  const handleWaypointClick = useCallback((wp: Waypoint) => {
+    setActiveWaypointId(wp.id);
+    setTargetPos(new THREE.Vector3(...wp.position));
+    setTargetLook(new THREE.Vector3(...wp.lookAt));
+  }, []);
+
   return (
     <Canvas
-      camera={{ position: [0, 2.8, 8], fov: 58, near: 0.1, far: 80 }}
-      shadows
       gl={{
         antialias: true,
-        alpha: false,
-        powerPreference: 'high-performance',
         toneMapping: THREE.ACESFilmicToneMapping,
         toneMappingExposure: 1.1,
+        powerPreference: 'high-performance',
       }}
-      style={{ background: '#06080f' }}
+      shadows
+      camera={{ fov: 72, near: 0.1, far: 80, position: [0, 1.7, 9] }}
+      style={{ position: 'absolute', inset: 0 }}
     >
-      <Suspense fallback={null}>
-        <ShowroomScene
-          hotspots={hotspots}
-          lang={lang}
-          onHotspotClick={onHotspotClick}
-        />
-      </Suspense>
+      <CameraController targetPos={targetPos} targetLook={targetLook} />
+      <ShowroomScene
+        hotspots={hotspots}
+        lang={lang}
+        onHotspotClick={onHotspotClick}
+        config={config}
+        activeWaypointId={activeWaypointId}
+        onWaypointClick={handleWaypointClick}
+      />
     </Canvas>
   );
 }
