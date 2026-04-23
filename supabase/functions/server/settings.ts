@@ -26,10 +26,10 @@ const DEFAULT_ANNOUNCEMENT_MESSAGES = [
   {
     id: "ann-1",
     text_fr: "Livraison rapide partout en Algerie",
-    text_ar: "توصيل سريع في كامل الجزائر",
+    text_ar: "ØªÙˆØµÙŠÙ„ Ø³Ø±ÙŠØ¹ ÙÙŠ ÙƒØ§Ù…Ù„ Ø§Ù„Ø¬Ø²Ø§Ø¦Ø±",
     color: "",
     text_color: "",
-    icon: "🚚",
+    icon: "ðŸšš",
     priority: 20,
     is_active: true,
     duration_ms: DEFAULT_ANNOUNCEMENT_DURATION_MS,
@@ -40,10 +40,10 @@ const DEFAULT_ANNOUNCEMENT_MESSAGES = [
   {
     id: "ann-2",
     text_fr: "Paiement a la livraison disponible",
-    text_ar: "الدفع عند الاستلام متوفر",
+    text_ar: "Ø§Ù„Ø¯ÙØ¹ Ø¹Ù†Ø¯ Ø§Ù„Ø§Ø³ØªÙ„Ø§Ù… Ù…ØªÙˆÙØ±",
     color: "",
     text_color: "",
-    icon: "💳",
+    icon: "ðŸ’³",
     priority: 10,
     is_active: true,
     duration_ms: DEFAULT_ANNOUNCEMENT_DURATION_MS,
@@ -57,21 +57,21 @@ const DEFAULT_SEARCH_TRENDING = [
   {
     id: "tr-1",
     text_fr: "Cartables",
-    text_ar: "محافظ مدرسية",
+    text_ar: "Ù…Ø­Ø§ÙØ¸ Ù…Ø¯Ø±Ø³ÙŠØ©",
     is_active: true,
     sort_order: 0,
   },
   {
     id: "tr-2",
     text_fr: "Trousses",
-    text_ar: "مقالم",
+    text_ar: "Ù…Ù‚Ø§Ù„Ù…",
     is_active: true,
     sort_order: 1,
   },
   {
     id: "tr-3",
     text_fr: "Packs scolaires",
-    text_ar: "عروض الدخول المدرسي",
+    text_ar: "Ø¹Ø±ÙˆØ¶ Ø§Ù„Ø¯Ø®ÙˆÙ„ Ø§Ù„Ù…Ø¯Ø±Ø³ÙŠ",
     is_active: true,
     sort_order: 2,
   },
@@ -82,15 +82,15 @@ const DEFAULT_ANNOUNCEMENT_BAR_COLOR = "#1A3C6E";
 const DEFAULT_NEWSLETTER_POPUP = {
   enabled: true,
   title_fr: "Bienvenue chez VERKING SCOLAIRE",
-  title_ar: "مرحبا بك في VERKING SCOLAIRE",
+  title_ar: "Ù…Ø±Ø­Ø¨Ø§ Ø¨Ùƒ ÙÙŠ VERKING SCOLAIRE",
   description_fr: "Recevez nos nouveautes et offres exclusives par email.",
-  description_ar: "توصل باخر المنتجات والعروض الحصرية عبر البريد الالكتروني.",
+  description_ar: "ØªÙˆØµÙ„ Ø¨Ø§Ø®Ø± Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª ÙˆØ§Ù„Ø¹Ø±ÙˆØ¶ Ø§Ù„Ø­ØµØ±ÙŠØ© Ø¹Ø¨Ø± Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø§Ù„ÙƒØªØ±ÙˆÙ†ÙŠ.",
   email_placeholder_fr: "Votre email",
-  email_placeholder_ar: "بريدك الالكتروني",
+  email_placeholder_ar: "Ø¨Ø±ÙŠØ¯Ùƒ Ø§Ù„Ø§Ù„ÙƒØªØ±ÙˆÙ†ÙŠ",
   button_text_fr: "S'abonner",
-  button_text_ar: "اشتراك",
+  button_text_ar: "Ø§Ø´ØªØ±Ø§Ùƒ",
   success_message_fr: "Merci, votre inscription est confirmee.",
-  success_message_ar: "شكرا، تم تسجيل اشتراكك بنجاح.",
+  success_message_ar: "Ø´ÙƒØ±Ø§ØŒ ØªÙ… ØªØ³Ø¬ÙŠÙ„ Ø§Ø´ØªØ±Ø§ÙƒÙƒ Ø¨Ù†Ø¬Ø§Ø­.",
 };
 
 const DEFAULT_CONTENT = {
@@ -137,8 +137,72 @@ const DEFAULT_THEME = {
   show_best_sellers: true,
   show_wholesale_section: true,
   show_testimonials: true,
-  logo_text: "VERKING SCOLAIRE",
+  logo_text: "VERKING",
   logo_subtitle: "STP STATIONERY",
+  logo_url: "",
+  secondary_logo_url: "",
+  hero_background_url: "",
+};
+
+const THREE_D_STORE_SETTINGS_KEY = "experience_3d_config";
+const THREE_D_KV_KEY = "experience:3d-config";
+const DEFAULT_3D_CONFIG = {
+  brand_title: "VERKING",
+  brand_subtitle: "S.T.P Stationery",
+  showroom_background_url: "",
+  primary_color: "#E5252A",
+  secondary_color: "#FFD700",
+  accent_color: "#1D4ED8",
+  floor_color: "#1A2033",
+  wall_color: "#2F385D",
+  fog_color: "#111827",
+  fog_near: 24,
+  fog_far: 58,
+  ambient_intensity: 0.72,
+  show_particles: true,
+  waypoints: [
+    {
+      id: "entrance",
+      label_fr: "Entree",
+      label_ar: "\u0627\u0644\u0645\u062f\u062e\u0644",
+      position: [0, 1.72, 10.8],
+      lookAt: [0, 2.3, 2.2],
+    },
+    {
+      id: "cartables",
+      label_fr: "Cartables",
+      label_ar: "\u0627\u0644\u0643\u0631\u0637\u0627\u0628\u0644",
+      position: [-7.6, 1.72, 2.6],
+      lookAt: [-12.8, 2.9, 0.8],
+    },
+    {
+      id: "trousses",
+      label_fr: "Trousses",
+      label_ar: "\u0627\u0644\u0645\u0642\u0644\u0645\u0627\u062a",
+      position: [7.6, 1.72, 2.6],
+      lookAt: [12.8, 2.9, 0.8],
+    },
+    {
+      id: "center",
+      label_fr: "Nouveautes",
+      label_ar: "\u0627\u0644\u062c\u062f\u064a\u062f",
+      position: [0, 1.72, 1.4],
+      lookAt: [0, 2.8, -3.8],
+    },
+    {
+      id: "back",
+      label_fr: "Fond du magasin",
+      label_ar: "\u0639\u0645\u0642 \u0627\u0644\u0645\u062d\u0644",
+      position: [0, 1.72, -6.8],
+      lookAt: [0, 2.7, -11.5],
+    },
+  ],
+  section_label_cartables_fr: "Cartables & Sacs",
+  section_label_cartables_ar: "\u0643\u0631\u0637\u0627\u0628\u0644 \u0648 \u0634\u0646\u0637",
+  section_label_trousses_fr: "Trousses & Stylos",
+  section_label_trousses_ar: "\u0645\u0642\u0644\u0645\u0627\u062a \u0648 \u0627\u0642\u0644\u0627\u0645",
+  section_label_center_fr: "Nouveautes",
+  section_label_center_ar: "\u0627\u0644\u062c\u062f\u064a\u062f",
 };
 
 const HOMEPAGE_SECTION_KEYS = [
@@ -158,11 +222,11 @@ const DEFAULT_HOMEPAGE_CONFIG: Record<string, any> = {
   hero: {
     enabled: true,
     title_fr: "Nouvelle Collection Rentree 2024",
-    title_ar: "مجموعة الدخول المدرسي الجديدة 2024",
+    title_ar: "Ù…Ø¬Ù…ÙˆØ¹Ø© Ø§Ù„Ø¯Ø®ÙˆÙ„ Ø§Ù„Ù…Ø¯Ø±Ø³ÙŠ Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø© 2024",
     subtitle_fr: "Decouvrez +60 modeles de cartables",
-    subtitle_ar: "اكتشف اكثر من 60 موديل",
+    subtitle_ar: "Ø§ÙƒØªØ´Ù Ø§ÙƒØ«Ø± Ù…Ù† 60 Ù…ÙˆØ¯ÙŠÙ„",
     cta_fr: "Decouvrir",
-    cta_ar: "اكتشف",
+    cta_ar: "Ø§ÙƒØªØ´Ù",
     cta_link: "/shop",
     image: "",
     source_mode: "manual",
@@ -172,7 +236,7 @@ const DEFAULT_HOMEPAGE_CONFIG: Record<string, any> = {
   categories: {
     enabled: true,
     title_fr: "Nos Categories",
-    title_ar: "فئاتنا",
+    title_ar: "ÙØ¦Ø§ØªÙ†Ø§",
     subtitle_fr: "",
     subtitle_ar: "",
     cta_fr: "",
@@ -186,7 +250,7 @@ const DEFAULT_HOMEPAGE_CONFIG: Record<string, any> = {
   featured: {
     enabled: true,
     title_fr: "Produits Vedettes",
-    title_ar: "منتجات مختارة",
+    title_ar: "Ù…Ù†ØªØ¬Ø§Øª Ù…Ø®ØªØ§Ø±Ø©",
     subtitle_fr: "",
     subtitle_ar: "",
     cta_fr: "",
@@ -201,7 +265,7 @@ const DEFAULT_HOMEPAGE_CONFIG: Record<string, any> = {
   new_arrivals: {
     enabled: true,
     title_fr: "Nouveautes",
-    title_ar: "وصل حديثا",
+    title_ar: "ÙˆØµÙ„ Ø­Ø¯ÙŠØ«Ø§",
     subtitle_fr: "",
     subtitle_ar: "",
     cta_fr: "",
@@ -216,7 +280,7 @@ const DEFAULT_HOMEPAGE_CONFIG: Record<string, any> = {
   best_sellers: {
     enabled: true,
     title_fr: "Meilleures Ventes",
-    title_ar: "الاكثر مبيعا",
+    title_ar: "Ø§Ù„Ø§ÙƒØ«Ø± Ù…Ø¨ÙŠØ¹Ø§",
     subtitle_fr: "",
     subtitle_ar: "",
     cta_fr: "",
@@ -231,7 +295,7 @@ const DEFAULT_HOMEPAGE_CONFIG: Record<string, any> = {
   promotions: {
     enabled: true,
     title_fr: "Promotions",
-    title_ar: "عروض خاصة",
+    title_ar: "Ø¹Ø±ÙˆØ¶ Ø®Ø§ØµØ©",
     subtitle_fr: "",
     subtitle_ar: "",
     cta_fr: "",
@@ -245,7 +309,7 @@ const DEFAULT_HOMEPAGE_CONFIG: Record<string, any> = {
   trust: {
     enabled: true,
     title_fr: "Pourquoi choisir VERKING",
-    title_ar: "لماذا تختار VERKING",
+    title_ar: "Ù„Ù…Ø§Ø°Ø§ ØªØ®ØªØ§Ø± VERKING",
     subtitle_fr: "",
     subtitle_ar: "",
     cta_fr: "",
@@ -259,7 +323,7 @@ const DEFAULT_HOMEPAGE_CONFIG: Record<string, any> = {
   testimonials: {
     enabled: true,
     title_fr: "Avis clients",
-    title_ar: "اراء العملاء",
+    title_ar: "Ø§Ø±Ø§Ø¡ Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡",
     subtitle_fr: "",
     subtitle_ar: "",
     cta_fr: "",
@@ -273,11 +337,11 @@ const DEFAULT_HOMEPAGE_CONFIG: Record<string, any> = {
   newsletter: {
     enabled: true,
     title_fr: "Newsletter",
-    title_ar: "النشرة البريدية",
+    title_ar: "Ø§Ù„Ù†Ø´Ø±Ø© Ø§Ù„Ø¨Ø±ÙŠØ¯ÙŠØ©",
     subtitle_fr: "Recevez les nouvelles offres en avant-premiere",
-    subtitle_ar: "توصل بالعروض الجديدة قبل الجميع",
+    subtitle_ar: "ØªÙˆØµÙ„ Ø¨Ø§Ù„Ø¹Ø±ÙˆØ¶ Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø© Ù‚Ø¨Ù„ Ø§Ù„Ø¬Ù…ÙŠØ¹",
     cta_fr: "Je m'abonne",
-    cta_ar: "اشترك الآن",
+    cta_ar: "Ø§Ø´ØªØ±Ùƒ Ø§Ù„Ø¢Ù†",
     cta_link: "#newsletter",
     image: "",
     source_mode: "manual",
@@ -287,11 +351,11 @@ const DEFAULT_HOMEPAGE_CONFIG: Record<string, any> = {
   wholesale: {
     enabled: true,
     title_fr: "Espace Grossiste",
-    title_ar: "فضاء الجملة",
+    title_ar: "ÙØ¶Ø§Ø¡ Ø§Ù„Ø¬Ù…Ù„Ø©",
     subtitle_fr: "",
     subtitle_ar: "",
     cta_fr: "Demande grossiste",
-    cta_ar: "طلب الجملة",
+    cta_ar: "Ø·Ù„Ø¨ Ø§Ù„Ø¬Ù…Ù„Ø©",
     cta_link: "/wholesale",
     image: "",
     source_mode: "manual",
@@ -339,6 +403,9 @@ const DB_THEME_FIELDS = [
   "show_testimonials",
   "logo_text",
   "logo_subtitle",
+  "logo_url",
+  "secondary_logo_url",
+  "hero_background_url",
 ] as const;
 
 const GENERAL_FIELDS = new Set([
@@ -755,6 +822,9 @@ function normalizeTheme(theme: any) {
     homepage_style: normalizeEnumValue(source.homepage_style, THEME_LAYOUT_STYLES, DEFAULT_THEME.homepage_style),
     logo_text: normalizeSafeText(source.logo_text, DEFAULT_THEME.logo_text),
     logo_subtitle: normalizeSafeText(source.logo_subtitle, DEFAULT_THEME.logo_subtitle),
+    logo_url: normalizeUrl(source.logo_url, DEFAULT_THEME.logo_url),
+    secondary_logo_url: normalizeUrl(source.secondary_logo_url, DEFAULT_THEME.secondary_logo_url),
+    hero_background_url: normalizeUrl(source.hero_background_url, DEFAULT_THEME.hero_background_url),
     font_heading: normalizeSafeText(source.font_heading, DEFAULT_THEME.font_heading),
     font_body: normalizeSafeText(source.font_body, DEFAULT_THEME.font_body),
     button_radius: normalizeSafeText(source.button_radius, DEFAULT_THEME.button_radius),
@@ -767,6 +837,119 @@ function normalizeTheme(theme: any) {
     published_at: normalizeOptionalDate(source.published_at),
     rollback_available: normalizeBoolean(source.rollback_available, false),
     last_snapshot: isPlainObject(source.last_snapshot) ? source.last_snapshot : null,
+  };
+}
+
+function normalize3DNumber(value: any, fallback: number, min?: number, max?: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  if (typeof min === "number" && parsed < min) return min;
+  if (typeof max === "number" && parsed > max) return max;
+  return parsed;
+}
+
+function normalize3DPoint(value: any, fallback: [number, number, number]): [number, number, number] {
+  if (Array.isArray(value)) {
+    return [
+      normalize3DNumber(value[0], fallback[0]),
+      normalize3DNumber(value[1], fallback[1], 1.2, 3.2),
+      normalize3DNumber(value[2], fallback[2]),
+    ];
+  }
+
+  if (typeof value === "string") {
+    const parts = value.trim().split(/[\s,]+/).filter(Boolean);
+    if (parts.length >= 3) {
+      return [
+        normalize3DNumber(parts[0], fallback[0]),
+        normalize3DNumber(parts[1], fallback[1], 1.2, 3.2),
+        normalize3DNumber(parts[2], fallback[2]),
+      ];
+    }
+  }
+
+  if (isPlainObject(value) && value.x !== undefined && value.y !== undefined && value.z !== undefined) {
+    return [
+      normalize3DNumber(value.x, fallback[0]),
+      normalize3DNumber(value.y, fallback[1], 1.2, 3.2),
+      normalize3DNumber(value.z, fallback[2]),
+    ];
+  }
+
+  return [...fallback] as [number, number, number];
+}
+
+function normalize3DWaypoint(value: any, index: number) {
+  const fallback = DEFAULT_3D_CONFIG.waypoints[index] || DEFAULT_3D_CONFIG.waypoints[0];
+  const source = isPlainObject(value) ? value : {};
+  const id = normalizeSafeText(source.id, "");
+  return {
+    id: id || `waypoint-${index + 1}`,
+    label_fr: normalizeSafeText(source.label_fr, fallback.label_fr),
+    label_ar: normalizeSafeText(source.label_ar, fallback.label_ar),
+    position: normalize3DPoint(source.position, fallback.position),
+    lookAt: normalize3DPoint(source.lookAt, fallback.lookAt),
+  };
+}
+
+function normalize3DWaypoints(value: any) {
+  if (!Array.isArray(value) || value.length === 0) {
+    return DEFAULT_3D_CONFIG.waypoints.map((waypoint, index) => normalize3DWaypoint(waypoint, index));
+  }
+  return value.map((waypoint, index) => normalize3DWaypoint(waypoint, index));
+}
+
+function normalize3DConfig(config: any) {
+  const source = isPlainObject(config) ? config : {};
+  return {
+    ...DEFAULT_3D_CONFIG,
+    ...source,
+    brand_title: normalizeSafeText(source.brand_title, DEFAULT_3D_CONFIG.brand_title),
+    brand_subtitle: normalizeSafeText(source.brand_subtitle, DEFAULT_3D_CONFIG.brand_subtitle),
+    showroom_background_url: normalizeUrl(
+      source.showroom_background_url,
+      DEFAULT_3D_CONFIG.showroom_background_url,
+    ),
+    primary_color: normalizeHexColor(source.primary_color, DEFAULT_3D_CONFIG.primary_color),
+    secondary_color: normalizeHexColor(source.secondary_color, DEFAULT_3D_CONFIG.secondary_color),
+    accent_color: normalizeHexColor(source.accent_color, DEFAULT_3D_CONFIG.accent_color),
+    floor_color: normalizeHexColor(source.floor_color, DEFAULT_3D_CONFIG.floor_color),
+    wall_color: normalizeHexColor(source.wall_color, DEFAULT_3D_CONFIG.wall_color),
+    fog_color: normalizeHexColor(source.fog_color, DEFAULT_3D_CONFIG.fog_color),
+    fog_near: normalize3DNumber(source.fog_near, DEFAULT_3D_CONFIG.fog_near, 8, 80),
+    fog_far: normalize3DNumber(source.fog_far, DEFAULT_3D_CONFIG.fog_far, 18, 120),
+    ambient_intensity: normalize3DNumber(
+      source.ambient_intensity,
+      DEFAULT_3D_CONFIG.ambient_intensity,
+      0.25,
+      1.5,
+    ),
+    show_particles: normalizeBoolean(source.show_particles, DEFAULT_3D_CONFIG.show_particles),
+    waypoints: normalize3DWaypoints(source.waypoints),
+    section_label_cartables_fr: normalizeSafeText(
+      source.section_label_cartables_fr,
+      DEFAULT_3D_CONFIG.section_label_cartables_fr,
+    ),
+    section_label_cartables_ar: normalizeSafeText(
+      source.section_label_cartables_ar,
+      DEFAULT_3D_CONFIG.section_label_cartables_ar,
+    ),
+    section_label_trousses_fr: normalizeSafeText(
+      source.section_label_trousses_fr,
+      DEFAULT_3D_CONFIG.section_label_trousses_fr,
+    ),
+    section_label_trousses_ar: normalizeSafeText(
+      source.section_label_trousses_ar,
+      DEFAULT_3D_CONFIG.section_label_trousses_ar,
+    ),
+    section_label_center_fr: normalizeSafeText(
+      source.section_label_center_fr,
+      DEFAULT_3D_CONFIG.section_label_center_fr,
+    ),
+    section_label_center_ar: normalizeSafeText(
+      source.section_label_center_ar,
+      DEFAULT_3D_CONFIG.section_label_center_ar,
+    ),
   };
 }
 function normalizeHomepageConfig(config: any) {
@@ -880,7 +1063,7 @@ function normalizeBannerRecord(record: any, index = 0, fallback?: any) {
   }
 
   const ctaFr = normalizeSafeText(source.cta_fr, previous.cta_fr ?? "Decouvrir");
-  const ctaAr = normalizeSafeText(source.cta_ar, previous.cta_ar ?? "اكتشف");
+  const ctaAr = normalizeSafeText(source.cta_ar, previous.cta_ar ?? "Ø§ÙƒØªØ´Ù");
 
   const linkUrl = normalizeUrl(
     source.link_url ?? source.linkUrl ?? source.link,
@@ -1514,6 +1697,63 @@ export async function updateTheme(c: any) {
   }
 }
 
+// -- 3D Experience Config --
+export async function get3DConfig(c: any) {
+  try {
+    const kvRaw = await kv.get(THREE_D_KV_KEY);
+    const kvConfig = kvRaw ? (typeof kvRaw === "string" ? JSON.parse(kvRaw) : kvRaw) : {};
+
+    if (await useDB()) {
+      const { data, error } = await db
+        .from("store_settings")
+        .select("value")
+        .eq("key", THREE_D_STORE_SETTINGS_KEY)
+        .maybeSingle();
+
+      if (error) {
+        if (!isMissingRelationError(error)) {
+          return errRes(c, `3D config DB error: ${error.message}`, 500);
+        }
+      } else if (data?.value) {
+        const dbValue = parseStoredValue(data.value);
+        const merged = normalize3DConfig({
+          ...(isPlainObject(kvConfig) ? kvConfig : {}),
+          ...(isPlainObject(dbValue) ? dbValue : {}),
+        });
+        return respond(c, { config: merged });
+      }
+    }
+
+    return respond(c, { config: normalize3DConfig(kvConfig) });
+  } catch (e) {
+    return errRes(c, `Get 3D config error: ${e.message}`);
+  }
+}
+
+export async function update3DConfig(c: any) {
+  try {
+    if (!await isAdmin(c)) return errRes(c, "Unauthorized", 401);
+    const body = await c.req.json();
+    const payload = normalize3DConfig(body?.config ?? body);
+
+    await kv.set(THREE_D_KV_KEY, JSON.stringify(payload));
+
+    if (await useDB()) {
+      const { error } = await db.from("store_settings").upsert({
+        key: THREE_D_STORE_SETTINGS_KEY,
+        value: payload,
+      });
+      if (error && !isMissingRelationError(error)) {
+        return errRes(c, `Update 3D config DB error: ${error.message}`, 500);
+      }
+    }
+
+    return respond(c, { success: true, config: payload });
+  } catch (e) {
+    return errRes(c, `Update 3D config error: ${e.message}`);
+  }
+}
+
 // -- Homepage Config (legacy compatibility) --
 export async function getHomepageConfig(c: any) {
   try {
@@ -1711,6 +1951,9 @@ export async function updateContent(c: any) {
     return errRes(c, `Update content error: ${e.message}`);
   }
 }
+
+
+
 
 
 

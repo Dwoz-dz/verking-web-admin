@@ -10,9 +10,19 @@ import { CartDrawer } from '../CartDrawer';
 
 export function Layout() {
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ background: 'transparent' }}>
+    <div
+      className="min-h-screen flex flex-col relative"
+      style={{
+        backgroundImage:
+          'linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.16) 100%), url("/screenFOND.png")',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center top',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed',
+      }}
+    >
       {/* ── Animated background (fixed, behind everything) ── */}
-      <AnimatedBackground />
+      {false && <AnimatedBackground />}
 
       {/* ── Content ── */}
       <div

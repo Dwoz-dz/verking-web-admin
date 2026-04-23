@@ -25,13 +25,14 @@ import { adminApi, api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useAdminUI } from '../../context/AdminUIContext';
 import { toast } from 'sonner';
+import { HeroCarouselManager } from '../../components/admin/HeroCarouselManager';
 import {
   normalizeBoolean,
   normalizeOrder,
   normalizeSafeText,
   normalizeUrlOrPath,
-  validateBilingualPair,
 } from '../../lib/textPipeline';
+import { validateHomepageConfig } from '../../lib/homepageValidator';
 
 type PreviewDevice = 'desktop' | 'mobile';
 type SourceMode = 'manual' | 'products' | 'categories' | 'banners';
@@ -247,7 +248,7 @@ const DEFAULT_CONFIG: HomepageConfig = {
     subtitle_ar: 'توصل بالجديد والعروض',
     cta_fr: 'Je m’abonne',
     cta_ar: 'اشترك الآن',
-    cta_link: '#newsletter',
+    cta_link: '/newsletter',
     style_variant: 'cta',
   },
   wholesale: {
@@ -303,26 +304,9 @@ function normalizeHomepageConfig(raw: any): HomepageConfig {
   return next;
 }
 
-function validateConfig(config: HomepageConfig) {
-  const issues: string[] = [];
-  for (const key of config.sections_order) {
-    const section = config[key];
-    if (!section.enabled) continue;
-
-    const pairIssues = validateBilingualPair(
-      section.title_fr,
-      section.title_ar,
-      `Titre FR (${SECTION_META[key].labelFr})`,
-      `العنوان AR (${SECTION_META[key].labelAr})`,
-    );
-    issues.push(...pairIssues);
-
-    if (section.cta_link && !normalizeUrlOrPath(section.cta_link, '')) {
-      issues.push(`Lien CTA invalide pour la section ${SECTION_META[key].labelFr}.`);
-    }
-  }
-  return issues;
-}
+// Validation is now centralized in src/app/lib/homepageValidator.ts —
+// the `publish()` handler calls `validateHomepageConfig` directly so it
+// can separate blocking errors from advisory warnings.
 
 function persistSyncState(lastDraftAt: string | null, lastPublishedAt: string | null) {
   localStorage.setItem(SYNC_KEY, JSON.stringify({ lastDraftAt, lastPublishedAt }));
@@ -466,10 +450,20 @@ export function AdminHomepage() {
   const publish = async () => {
     if (!token) return;
     const payload = normalizeHomepageConfig(draftConfig);
-    const issues = validateConfig(payload);
-    if (issues.length) {
-      toast.error(issues[0]);
+    // Run the structured validator once and split errors from warnings:
+    // errors gate the publish, warnings are surfaced as a secondary toast
+    // so the admin sees them without being blocked.
+    const report = validateHomepageConfig(payload);
+    if (!report.canPublish) {
+      const head = report.errors[0]?.messageFr || 'Configuration invalide.';
+      const extra = report.errors.length > 1 ? ` (+${report.errors.length - 1} autre${report.errors.length > 2 ? 's' : ''})` : '';
+      toast.error(head + extra);
       return;
+    }
+    if (report.warnings.length) {
+      const head = report.warnings[0].messageFr;
+      const extra = report.warnings.length > 1 ? ` (+${report.warnings.length - 1} autre${report.warnings.length > 2 ? 's' : ''})` : '';
+      toast.message(`Avertissement: ${head}${extra}`);
     }
 
     setPublishing(true);
@@ -576,6 +570,9 @@ export function AdminHomepage() {
           </button>
         </div>
       )}
+      {/* ─── Gestionnaire du Hero Carousel (Carrousel publicitaire principal) ─── */}
+      <HeroCarouselManager />
+
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className={`text-3xl font-black ${t.text}`}>Page d’accueil</h1>
@@ -1047,7 +1044,6 @@ function LabeledTextarea({
         onChange={(event) => onChange(event.target.value)}
         rows={3}
         dir={dir}
-        className="w-full resize-y rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-blue-300 focus:outline-none"
       />
     </label>
   );

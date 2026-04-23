@@ -83,7 +83,11 @@ export function normalizeOptionalHexColor(value: unknown) {
 export function normalizeUrlOrPath(value: unknown, fallback = '') {
   const normalized = normalizeUnicodeText(value, '');
   if (!normalized) return fallback;
+  // Accept relative paths (/shop), hash anchors (#newsletter) and
+  // mailto:/tel: links — these are all valid CTA targets on the storefront.
   if (normalized.startsWith('/')) return normalized;
+  if (normalized.startsWith('#') && normalized.length > 1) return normalized;
+  if (/^(mailto:|tel:)/i.test(normalized)) return normalized;
   try {
     const url = new URL(normalized);
     if (url.protocol === 'http:' || url.protocol === 'https:') return normalized;
@@ -123,6 +127,6 @@ export function validateDateRange(startAt: string | null, endAt: string | null) 
   const start = Date.parse(startAt);
   const end = Date.parse(endAt);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return 'Plage de dates invalide.';
-  if (end < start) return 'La date de fin doit être postérieure à la date de début.';
+  if (end < start) return 'La date de fin doit etre posterieure a la date de debut.';
   return null;
 }

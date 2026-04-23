@@ -483,10 +483,11 @@ export function ShopPage() {
                   ))}
                 </div>
               ) : (
-                <div className="grid gap-5 grid-cols-2 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid grid-cols-2 gap-4 md:gap-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
                   {filtered.map((p, i) => (
                     <motion.div
                       layout key={p.id}
+                      className="h-full"
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: i * 0.04 }}

@@ -1,6 +1,7 @@
 import {
     Bell,
     Box,
+    Boxes,
     ChevronRight,
     Eye,
     EyeOff,
@@ -19,6 +20,7 @@ import {
     Settings,
     Shield,
     ShoppingCart,
+    Sparkles,
     Sun,
     Tag,
     TrendingUp,
@@ -32,25 +34,131 @@ import { Toaster } from "sonner";
 import { AdminUIProvider, useAdminUI } from "../../context/AdminUIContext";
 import { useAuth } from "../../context/AuthContext";
 
-const navItems = [
+/**
+ * Every nav item carries its own accent palette so the sidebar reads
+ * like a well-organised dashboard — each section gets a unique, soft
+ * colour that pops against the dark navy background without hurting
+ * readability. Icon tiles always use the gradient; the row itself only
+ * tints softly on hover and lights up fully when active.
+ *
+ *   accent.from / accent.to  → icon tile gradient + active row bg
+ *   accent.tint              → hover / inactive row tint (rgba)
+ *   accent.active            → active chevron colour hint
+ */
+type NavAccent = {
+  from: string;
+  to: string;
+  tint: string;
+  active: string;
+};
+
+const navItems: Array<{
+  to: string;
+  icon: React.ElementType;
+  label: string;
+  badge: string | null;
+  accent: NavAccent;
+  special?: "stock";
+}> = [
   {
     to: "/admin/dashboard",
     icon: LayoutDashboard,
     label: "Tableau de bord",
     badge: null,
+    accent: { from: "#3B82F6", to: "#1D4ED8", tint: "rgba(59,130,246,0.18)", active: "#60A5FA" },
   },
-  { to: "/admin/products", icon: Package, label: "Produits", badge: null },
-  { to: "/admin/categories", icon: Tag, label: "Catégories", badge: null },
-  { to: "/admin/orders", icon: ShoppingCart, label: "Commandes", badge: "new" },
-  { to: "/admin/customers", icon: Users, label: "Clients", badge: null },
-  { to: "/admin/wholesale", icon: TrendingUp, label: "Grossiste", badge: null },
-  { to: "/admin/media", icon: ImageIcon, label: "Médiathèque", badge: null },
-  { to: "/admin/homepage", icon: Layout, label: "Page d'accueil", badge: null },
-  { to: "/admin/banners", icon: Image, label: "Bannières", badge: null },
-  { to: "/admin/theme", icon: Palette, label: "Thème & Design", badge: null },
-  { to: "/admin/content", icon: FileText, label: "Contenu", badge: null },
-  { to: "/admin/settings", icon: Settings, label: "Paramètres", badge: null },
-  { to: "/admin/3d-params", icon: Box, label: "Paramètres 3D", badge: null },
+  {
+    to: "/admin/products",
+    icon: Package,
+    label: "Produits",
+    badge: null,
+    accent: { from: "#F97316", to: "#C2410C", tint: "rgba(249,115,22,0.18)", active: "#FB923C" },
+  },
+  {
+    to: "/admin/categories",
+    icon: Tag,
+    label: "Catégories",
+    badge: null,
+    accent: { from: "#EC4899", to: "#BE185D", tint: "rgba(236,72,153,0.18)", active: "#F472B6" },
+  },
+  {
+    to: "/admin/orders",
+    icon: ShoppingCart,
+    label: "Commandes",
+    badge: "new",
+    accent: { from: "#10B981", to: "#047857", tint: "rgba(16,185,129,0.18)", active: "#34D399" },
+  },
+  {
+    to: "/admin/customers",
+    icon: Users,
+    label: "Clients",
+    badge: null,
+    accent: { from: "#8B5CF6", to: "#6D28D9", tint: "rgba(139,92,246,0.18)", active: "#A78BFA" },
+  },
+  {
+    to: "/admin/wholesale",
+    icon: TrendingUp,
+    label: "Grossiste",
+    badge: null,
+    accent: { from: "#14B8A6", to: "#0F766E", tint: "rgba(20,184,166,0.18)", active: "#2DD4BF" },
+  },
+  {
+    to: "/admin/media",
+    icon: ImageIcon,
+    label: "Médiathèque",
+    badge: null,
+    accent: { from: "#06B6D4", to: "#0E7490", tint: "rgba(6,182,212,0.18)", active: "#22D3EE" },
+  },
+  {
+    to: "/admin/homepage",
+    icon: Layout,
+    label: "Page d'accueil",
+    badge: null,
+    accent: { from: "#D946EF", to: "#A21CAF", tint: "rgba(217,70,239,0.18)", active: "#E879F9" },
+  },
+  {
+    to: "/admin/banners",
+    icon: Image,
+    label: "Bannières",
+    badge: null,
+    accent: { from: "#F43F5E", to: "#BE123C", tint: "rgba(244,63,94,0.18)", active: "#FB7185" },
+  },
+  {
+    to: "/admin/theme",
+    icon: Palette,
+    label: "Thème & Design",
+    badge: null,
+    accent: { from: "#A855F7", to: "#7E22CE", tint: "rgba(168,85,247,0.18)", active: "#C084FC" },
+  },
+  {
+    to: "/admin/content",
+    icon: FileText,
+    label: "Contenu",
+    badge: null,
+    accent: { from: "#84CC16", to: "#4D7C0F", tint: "rgba(132,204,22,0.20)", active: "#A3E635" },
+  },
+  {
+    to: "/admin/settings",
+    icon: Settings,
+    label: "Paramètres",
+    badge: null,
+    accent: { from: "#64748B", to: "#334155", tint: "rgba(148,163,184,0.22)", active: "#94A3B8" },
+  },
+  {
+    to: "/admin/3d-params",
+    icon: Box,
+    label: "Paramètres 3D",
+    badge: null,
+    accent: { from: "#EAB308", to: "#A16207", tint: "rgba(234,179,8,0.20)", active: "#FACC15" },
+  },
+  {
+    to: "/admin/stock",
+    icon: Boxes,
+    label: "Gestionnaire de stock",
+    badge: "NEW",
+    accent: { from: "#10B981", to: "#0891B2", tint: "rgba(16,185,129,0.22)", active: "#34D399" },
+    special: "stock",
+  },
 ];
 
 /** Gradient logo — VERKING (bleu) + SCOLAIRE (or) */
@@ -469,147 +577,195 @@ function AdminPanelInner() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
           {navItems.map((item) => {
             const active = isActive(item.to);
+            const accent = item.accent;
+            const isStock = item.special === "stock";
+
+            // Shared visual language:
+            //   - Icon tile on the left always shows the item's accent gradient
+            //   - Inactive row sits on a faint accent tint so the eye can scan
+            //     each section at a glance even before hovering
+            //   - Active row gets a full gradient bg + white text
+            //   - The Stock Manager gets a slightly stronger resting tint so
+            //     it still reads as the "new" pinned tool
+            const rowStyle: React.CSSProperties = active
+              ? {
+                  background: `linear-gradient(135deg, ${accent.from}, ${accent.to})`,
+                  boxShadow: `0 10px 25px -12px ${accent.from}80`,
+                }
+              : {
+                  background: isStock ? accent.tint : "transparent",
+                };
+
+            const iconTileStyle: React.CSSProperties = {
+              background: active
+                ? "rgba(255,255,255,0.22)"
+                : `linear-gradient(135deg, ${accent.from}, ${accent.to})`,
+              boxShadow: active
+                ? "inset 0 0 0 1px rgba(255,255,255,0.35)"
+                : `0 4px 10px -4px ${accent.from}aa`,
+            };
+
+            const hoverTint = accent.tint;
+
             return (
               <Link
                 key={item.to}
                 to={item.to}
                 onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                style={rowStyle}
+                className={`group relative flex items-center gap-3 px-2.5 py-2 rounded-xl text-[13px] font-bold transition-all duration-200 overflow-hidden ${
                   active
-                    ? isDark
-                      ? "bg-[#1f6feb] text-white"
-                      : "bg-white text-[#1A3C6E]"
+                    ? "text-white"
                     : isDark
-                      ? "text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#161b22]"
-                      : "text-white/70 hover:text-white hover:bg-white/10"
+                      ? "text-[#d1d5db] hover:text-white"
+                      : "text-white/90 hover:text-white"
                 }`}
+                onMouseEnter={(event) => {
+                  if (!active) {
+                    (event.currentTarget as HTMLElement).style.background = hoverTint;
+                  }
+                }}
+                onMouseLeave={(event) => {
+                  if (!active) {
+                    (event.currentTarget as HTMLElement).style.background = isStock ? accent.tint : "transparent";
+                  }
+                }}
               >
-                <item.icon size={16} className={active ? "" : "opacity-70"} />
+                <span
+                  className="flex h-7 w-7 flex-none items-center justify-center rounded-lg transition-all duration-200"
+                  style={iconTileStyle}
+                >
+                  {React.createElement(item.icon, { size: 14, className: "text-white" })}
+                </span>
                 <span className="flex-1 truncate">{item.label}</span>
-                {active && <ChevronRight size={13} className="opacity-60" />}
+                {item.badge && (
+                  <span
+                    className="flex-none rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider"
+                    style={{
+                      background: active
+                        ? "rgba(255,255,255,0.25)"
+                        : `linear-gradient(135deg, ${accent.from}, ${accent.to})`,
+                      color: "#ffffff",
+                      boxShadow: active ? "none" : `0 2px 6px -2px ${accent.from}aa`,
+                    }}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+                {active && (
+                  <ChevronRight
+                    size={14}
+                    className="flex-none"
+                    style={{ color: "rgba(255,255,255,0.9)" }}
+                  />
+                )}
               </Link>
             );
           })}
         </nav>
 
-        {/* Bottom */}
+        {/* Footer: dark toggle + logout */}
         <div
-          className={`p-2 ${isDark ? "border-t border-[#21262d]" : "border-t border-white/10"}`}
+          className={`px-3 py-3 ${
+            isDark ? "border-t border-[#21262d]" : "border-t border-white/10"
+          }`}
         >
-          <Link
-            to="/"
-            target="_blank"
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all mb-0.5 ${
-              isDark
-                ? "text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#161b22]"
-                : "text-white/60 hover:text-white hover:bg-white/10"
-            }`}
-          >
-            <Home size={16} className="opacity-70" />
-            Voir la boutique
-          </Link>
           <button
-            onClick={logout}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              isDark
-                ? "text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                : "text-red-200 hover:text-red-100 hover:bg-red-500/20"
-            }`}
+            type="button"
+            onClick={toggleDark}
+            className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-[12px] font-bold text-white/85 hover:bg-white/10 transition-colors min-h-[44px]"
           >
-            <LogOut size={16} className="opacity-70" />
-            Déconnexion
+            {isDark ? <Sun size={14} /> : <Moon size={14} />}
+            <span className="flex-1 text-left">
+              {isDark ? "Mode clair" : "Mode sombre"}
+            </span>
+            <Sparkles size={12} className="text-white/40" />
+          </button>
+          <button
+            type="button"
+            onClick={logout}
+            className="mt-1 flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-[12px] font-bold text-red-200 hover:bg-red-500/20 transition-colors min-h-[44px]"
+          >
+            <LogOut size={14} />
+            <span className="flex-1 text-left">Déconnexion</span>
           </button>
         </div>
       </aside>
 
-      {/* Mobile Overlay */}
+      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
         />
       )}
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header */}
+      {/* Main column */}
+      <main className="flex-1 min-w-0 flex flex-col">
+        {/* Topbar */}
         <header
-          className={`sticky top-0 z-30 px-4 py-3 flex items-center justify-between gap-3 ${
+          className={`sticky top-0 z-30 flex items-center gap-3 px-4 py-3 backdrop-blur-xl ${
             isDark
-              ? "bg-[#0d1117] border-b border-[#21262d]"
-              : "bg-white border-b border-gray-200"
+              ? "bg-[#0d1117]/80 border-b border-[#21262d]"
+              : "bg-white/80 border-b border-gray-200"
           }`}
-          style={
-            !isDark
-              ? {
-                  backdropFilter: "blur(12px)",
-                  backgroundColor: "rgba(255,255,255,0.95)",
-                }
-              : {}
-          }
         >
           <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className={`lg:hidden p-2 rounded-xl transition-colors ${
+            type="button"
+            onClick={() => setSidebarOpen((s) => !s)}
+            className={`lg:hidden inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl ${
               isDark
-                ? "text-[#7d8590] hover:bg-[#161b22]"
-                : "text-gray-600 hover:bg-gray-100"
+                ? "text-white hover:bg-white/5"
+                : "text-gray-700 hover:bg-gray-100"
             }`}
+            aria-label={sidebarOpen ? "Fermer le menu" : "Ouvrir le menu"}
           >
-            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+            {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
-
-          <div className="hidden lg:flex items-center gap-2">
-            <div className={`font-bold text-sm ${t.text}`}>
-              {currentPage?.label || "Administration"}
-            </div>
-            <div className={`text-xs ${t.textMuted}`}>— VERKING SCOLAIRE</div>
+          <div className="flex-1 min-w-0">
+            <h1 className={`text-sm sm:text-base font-black truncate ${t.text}`}>
+              {currentPage?.label || "Admin"}
+            </h1>
+            <p className={`text-[11px] ${t.textMuted}`}>
+              Verking Scolaire — Admin Center
+            </p>
           </div>
-
-          <div className="flex items-center gap-2 ml-auto">
-            <button
-              onClick={toggleDark}
-              className={`p-2 rounded-xl transition-all ${isDark ? "text-yellow-400 hover:bg-[#161b22]" : "text-gray-500 hover:bg-gray-100"}`}
-              title={isDark ? "Mode clair" : "Mode sombre"}
-            >
-              {isDark ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-
-            <button
-              className={`p-2 rounded-xl transition-colors relative ${
-                isDark
-                  ? "text-[#7d8590] hover:bg-[#161b22]"
-                  : "text-gray-500 hover:bg-gray-100"
-              }`}
-            >
-              <Bell size={18} />
-            </button>
-
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-black text-white shadow-md"
-              style={{
-                background: "linear-gradient(135deg, #1A3C6E, #2d5ba5)",
-              }}
-            >
-              A
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={toggleDark}
+            className={`hidden lg:inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-xl transition-colors ${
+              isDark
+                ? "bg-white/5 text-white hover:bg-white/10"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+            aria-label="Basculer thème"
+          >
+            {isDark ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+          <button
+            type="button"
+            className={`hidden sm:inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-xl transition-colors ${
+              isDark
+                ? "bg-white/5 text-white hover:bg-white/10"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+            aria-label="Notifications"
+          >
+            <Bell size={15} />
+          </button>
         </header>
 
         {/* Content */}
-        <main className={`flex-1 overflow-auto p-4 lg:p-6 ${t.bg}`}>
+        <div className="flex-1 overflow-x-hidden p-4 sm:p-6">
           <Outlet />
-        </main>
-      </div>
+        </div>
+      </main>
 
-      <Toaster
-        position="top-right"
-        richColors
-        theme={isDark ? "dark" : "light"}
-      />
+      <Toaster position="top-right" richColors closeButton />
     </div>
   );
 }

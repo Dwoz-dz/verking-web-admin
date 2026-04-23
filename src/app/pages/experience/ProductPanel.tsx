@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router';
-import { X, ShoppingBag, Tag, ChevronRight, Star } from 'lucide-react';
+import { ChevronRight, ShoppingBag, X } from 'lucide-react';
 import { formatPrice } from '../../lib/translations';
 
 export interface HotspotData {
@@ -23,47 +23,45 @@ interface Props {
 }
 
 export function ProductPanel({ hotspot, lang, onClose }: Props) {
-  const visible = !!hotspot;
-
   if (!hotspot) return null;
 
   const label = lang === 'ar' ? hotspot.label_ar : hotspot.label_fr;
-  const description = lang === 'ar' ? (hotspot.description_ar || '') : (hotspot.description_fr || '');
-  const previewProducts = (hotspot.products || []).slice(0, 3);
+  const description = lang === 'ar'
+    ? (hotspot.description_ar || '')
+    : (hotspot.description_fr || '');
+  const previewProducts = (hotspot.products || []).slice(0, 6);
+
+  const cheapest = previewProducts.length > 0
+    ? Math.min(...previewProducts.map((product) => Number(product.sale_price || product.price || 0)))
+    : null;
 
   return (
     <>
-      {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300"
-        style={{ opacity: visible ? 1 : 0 }}
+        className="fixed inset-0 z-40 bg-black/55 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden
       />
 
-      {/* Panel */}
       <div
-        className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-sm flex flex-col"
+        className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-md flex flex-col"
         style={{
-          background: 'linear-gradient(160deg,#0e1225 0%,#0a0c1a 100%)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '-20px 0 60px rgba(0,0,0,0.6)',
-          transform: visible ? 'translateX(0)' : 'translateX(100%)',
-          transition: 'transform 0.4s cubic-bezier(0.4,0,0.2,1)',
+          background: 'linear-gradient(160deg,#0d1327 0%,#090d1b 100%)',
+          borderLeft: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '-24px 0 60px rgba(0,0,0,0.6)',
         }}
         dir={lang === 'ar' ? 'rtl' : 'ltr'}
       >
-        {/* Header */}
         <div
           className="flex items-center justify-between p-5 shrink-0"
           style={{
-            borderBottom: '1px solid rgba(255,255,255,0.07)',
-            background: `linear-gradient(135deg, ${hotspot.color}18, transparent)`,
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            background: `linear-gradient(135deg, ${hotspot.color}22, transparent)`,
           }}
         >
           <div className="flex items-center gap-3">
             <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-lg"
+              className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl"
               style={{
                 background: `linear-gradient(135deg, ${hotspot.color}, ${hotspot.color}99)`,
                 boxShadow: `0 8px 24px ${hotspot.color}40`,
@@ -73,7 +71,7 @@ export function ProductPanel({ hotspot, lang, onClose }: Props) {
             </div>
             <div>
               <p className="text-white/50 text-[10px] font-bold uppercase tracking-widest">
-                {lang === 'ar' ? 'الفئة' : hotspot.type === 'category' ? 'Catégorie' : 'Produit'}
+                {lang === 'ar' ? 'الفئة' : hotspot.type === 'category' ? 'Categorie' : 'Produit'}
               </p>
               <h2 className="text-white font-black text-xl leading-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
                 {label}
@@ -82,28 +80,26 @@ export function ProductPanel({ hotspot, lang, onClose }: Props) {
           </div>
           <button
             onClick={onClose}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all"
-            aria-label="Fermer"
+            className="w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all"
+            aria-label={lang === 'ar' ? 'اغلاق' : 'Fermer'}
           >
             <X size={18} />
           </button>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {description && (
-            <p className="text-white/60 text-sm leading-relaxed font-medium">
+            <p className="text-white/70 text-sm leading-relaxed font-medium">
               {description}
             </p>
           )}
 
-          {/* Stats bar */}
           <div
             className="rounded-2xl p-4 grid grid-cols-2 gap-3"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
           >
             <div className="flex flex-col gap-1">
-              <span className="text-white/40 text-[10px] uppercase tracking-widest font-bold">
+              <span className="text-white/45 text-[10px] uppercase tracking-widest font-bold">
                 {lang === 'ar' ? 'المنتجات' : 'Produits'}
               </span>
               <span className="text-white font-black text-2xl">
@@ -111,36 +107,36 @@ export function ProductPanel({ hotspot, lang, onClose }: Props) {
               </span>
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-white/40 text-[10px] uppercase tracking-widest font-bold">
-                {lang === 'ar' ? 'من' : 'Dès'}
+              <span className="text-white/45 text-[10px] uppercase tracking-widest font-bold">
+                {lang === 'ar' ? 'يبدا من' : 'Des'}
               </span>
               <span className="font-black text-xl" style={{ color: hotspot.color }}>
-                {previewProducts.length > 0
-                  ? formatPrice(
-                      Math.min(...previewProducts.map((p) => p.sale_price || p.price || 0)),
-                      lang,
-                    )
-                  : '—'}
+                {cheapest !== null ? formatPrice(cheapest, lang) : '—'}
               </span>
             </div>
           </div>
 
-          {/* Preview products */}
           {previewProducts.length > 0 && (
             <div className="space-y-2">
-              <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest">
-                {lang === 'ar' ? 'منتجات من هذه الفئة' : 'Aperçu produits'}
+              <p className="text-white/45 text-[10px] font-bold uppercase tracking-widest">
+                {lang === 'ar' ? 'بطاقات منتجات' : 'Cartes produits'}
               </p>
+
               {previewProducts.map((product) => {
-                const name = lang === 'ar' ? product.name_ar : product.name_fr;
-                const price = product.sale_price || product.price;
-                const isPromo = !!(product.sale_price && product.sale_price < product.price);
-                const fallback = 'https://images.unsplash.com/photo-1594608661623-aa0bd3a69d98?w=120&q=80';
+                const name = lang === 'ar'
+                  ? (product.name_ar || product.name_fr || 'منتج')
+                  : (product.name_fr || product.name_ar || 'Produit');
+                const basePrice = Number(product.price || 0);
+                const salePrice = Number(product.sale_price || basePrice);
+                const isPromo = salePrice > 0 && salePrice < basePrice;
+                const finalPrice = salePrice || basePrice;
+                const fallback = 'https://images.unsplash.com/photo-1594608661623-aa0bd3a69d98?w=220&q=80';
+
                 return (
                   <Link
                     key={product.id}
                     to={`/product/${product.id}`}
-                    className="flex items-center gap-3 rounded-xl p-3 group transition-all"
+                    className="flex items-center gap-3 rounded-xl p-3 transition-all hover:translate-x-[2px]"
                     style={{
                       background: 'rgba(255,255,255,0.04)',
                       border: '1px solid rgba(255,255,255,0.06)',
@@ -149,20 +145,20 @@ export function ProductPanel({ hotspot, lang, onClose }: Props) {
                     <img
                       src={product.images?.[0] || fallback}
                       alt={name}
-                      className="w-12 h-12 rounded-lg object-cover shrink-0"
-                      onError={(e) => { e.currentTarget.src = fallback; }}
+                      className="w-14 h-14 rounded-lg object-cover shrink-0"
+                      onError={(event) => {
+                        event.currentTarget.src = fallback;
+                      }}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-white text-xs font-semibold truncate group-hover:text-amber-300 transition-colors">
-                        {name}
-                      </p>
+                      <p className="text-white text-xs font-semibold truncate">{name}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="font-black text-sm" style={{ color: hotspot.color }}>
-                          {formatPrice(price, lang)}
+                          {formatPrice(finalPrice, lang)}
                         </span>
                         {isPromo && (
                           <span className="text-white/40 line-through text-xs">
-                            {formatPrice(product.price, lang)}
+                            {formatPrice(basePrice, lang)}
                           </span>
                         )}
                       </div>
@@ -179,11 +175,10 @@ export function ProductPanel({ hotspot, lang, onClose }: Props) {
           )}
         </div>
 
-        {/* CTA Footer */}
         <div className="p-5 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
           <Link
             to={hotspot.link}
-            className="flex items-center justify-center gap-2.5 w-full py-4 rounded-2xl font-black text-sm uppercase tracking-[0.14em] transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+            className="flex items-center justify-center gap-2.5 w-full py-4 rounded-2xl font-black text-sm uppercase tracking-[0.12em] transition-all duration-200 hover:scale-[1.01]"
             style={{
               background: `linear-gradient(135deg, ${hotspot.color}, ${hotspot.color}cc)`,
               boxShadow: `0 8px 24px ${hotspot.color}40`,
@@ -195,13 +190,13 @@ export function ProductPanel({ hotspot, lang, onClose }: Props) {
             <ChevronRight size={15} className={lang === 'ar' ? 'rotate-180' : ''} />
           </Link>
 
-          <Link
-            to="/experience"
-            className="flex items-center justify-center gap-2 w-full mt-2 py-3 rounded-2xl font-bold text-xs text-white/40 hover:text-white/70 transition-colors"
+          <button
+            type="button"
+            className="w-full mt-2 py-2.5 rounded-2xl font-bold text-xs text-white/45 hover:text-white/75 transition-colors"
             onClick={onClose}
           >
-            ← {lang === 'ar' ? 'العودة للمعرض' : 'Retour au showroom'}
-          </Link>
+            {lang === 'ar' ? 'العودة الى الشوروم' : 'Retour au showroom'}
+          </button>
         </div>
       </div>
     </>

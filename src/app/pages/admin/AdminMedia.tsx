@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Upload, Trash2, Copy, Search, Image as ImageIcon, Film, Grid, List,
-  X, Check, FolderOpen, RefreshCw, ExternalLink
+  X, Check, FolderOpen, RefreshCw, ExternalLink, Database, Sparkles
 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { adminApi, API_BASE, apiHeaders } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useAdminUI } from '../../context/AdminUIContext';
@@ -53,6 +54,22 @@ export function AdminMedia() {
   };
 
   useEffect(() => { load(); }, [token]);
+
+  // Phase 5: realtime sync -- 30s poll + focus/visibility refresh
+  useEffect(() => {
+    if (!token) return;
+    const interval = window.setInterval(() => { load(); }, 30000);
+    const onFocus = () => { load(); };
+    const onVisibility = () => { if (document.visibilityState === 'visible') load(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   const filtered = media.filter(m => {
     if (filter === 'image' && !m.content_type?.startsWith('image/')) return false;
@@ -173,27 +190,68 @@ export function AdminMedia() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className={`text-2xl font-black ${t.text}`}>Médiathèque</h1>
-          <p className={`text-sm ${t.textMuted}`}>{media.length} fichier(s) stockés sur Supabase Storage</p>
+      {/* Premium Header -- Phase 5 */}
+      <motion.div
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: 'easeOut' }}
+        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div className="flex items-center gap-3">
+          <motion.div
+            initial={{ scale: 0.85, rotate: -8, opacity: 0 }}
+            animate={{ scale: 1, rotate: 0, opacity: 1 }}
+            transition={{ duration: 0.5, ease: 'easeOut', delay: 0.05 }}
+            className="flex h-12 w-12 items-center justify-center rounded-2xl shadow-lg ring-1 ring-white/50"
+            style={{
+              background:
+                'linear-gradient(135deg, #06b6d4 0%, #0284c7 45%, #1d4ed8 100%)',
+              boxShadow:
+                '0 10px 24px -8px rgba(37, 99, 235, 0.55), inset 0 1px 0 rgba(255,255,255,0.65)',
+            }}
+          >
+            <Database size={24} className="text-white drop-shadow" />
+          </motion.div>
+          <div>
+            <h1 className={`text-2xl sm:text-3xl font-black leading-tight ${t.text}`}>Médiathèque</h1>
+            <p className={`mt-0.5 text-xs sm:text-sm ${t.textMuted}`}>
+              {media.length} fichier(s) stockés sur Supabase Storage
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => load()} className={`p-2.5 rounded-xl border ${t.cardBorder} ${t.rowHover} transition-colors`}>
-            <RefreshCw size={16} className={t.textMuted} />
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-50 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-cyan-700 ring-1 ring-cyan-200">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-70" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan-500" />
+            </span>
+            Realtime Sync
+          </span>
+          <button
+            onClick={() => load()}
+            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold shadow-sm transition active:scale-[0.98] ${t.cardBorder} ${t.rowHover}`}
+            title="Actualiser"
+          >
+            <RefreshCw size={14} className={t.textMuted} />
+            <span className={t.textMuted}>Actualiser</span>
           </button>
           <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleFileInput} />
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#1A3C6E] hover:bg-[#0d2447] text-white font-bold rounded-xl text-sm transition-colors shadow-sm disabled:opacity-60"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black text-white shadow-lg disabled:opacity-60 active:scale-[0.98] transition"
+            style={{
+              background:
+                'linear-gradient(135deg, #06b6d4 0%, #0284c7 50%, #1d4ed8 100%)',
+              boxShadow:
+                '0 10px 24px -8px rgba(37, 99, 235, 0.55), inset 0 1px 0 rgba(255,255,255,0.4)',
+            }}
           >
-            <Upload size={16} />
-            {uploading ? 'Upload en cours...' : 'Uploader des fichiers'}
+            {uploading ? <Sparkles size={14} className="animate-pulse" /> : <Upload size={14} />}
+            {uploading ? 'Upload en cours...' : 'Uploader'}
           </button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Upload Progress */}
       {uploadProgress.length > 0 && (

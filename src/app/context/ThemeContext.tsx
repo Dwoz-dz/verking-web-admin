@@ -24,6 +24,9 @@ export interface ThemeSettings {
   show_testimonials: boolean;
   logo_text: string;
   logo_subtitle: string;
+  logo_url: string;
+  secondary_logo_url: string;
+  hero_background_url: string;
   theme_name?: string;
   theme_description?: string;
   imported_from?: string;
@@ -52,8 +55,11 @@ const defaults: ThemeSettings = {
   show_best_sellers: true,
   show_wholesale_section: true,
   show_testimonials: true,
-  logo_text: 'VERKING SCOLAIRE',
+  logo_text: 'VERKING',
   logo_subtitle: 'STP STATIONERY',
+  logo_url: '',
+  secondary_logo_url: '',
+  hero_background_url: '',
   theme_name: 'Theme principal',
   theme_description: '',
   imported_from: '',

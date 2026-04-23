@@ -25,10 +25,10 @@ import { AdminSettings } from "./pages/admin/AdminSettings";
 import { AdminTheme } from "./pages/admin/AdminTheme";
 import { AdminWholesale } from "./pages/admin/AdminWholesale";
 import { Admin3DParams } from "./pages/admin/Admin3DParams";
+import { AdminStockManager } from "./pages/admin/AdminStockManager";
 import { VirtualStore } from "./pages/experience/VirtualStore";
 
 export const router = createBrowserRouter([
-  // ── STOREFRONT ──
   {
     path: "/",
     Component: Layout,
@@ -46,14 +46,10 @@ export const router = createBrowserRouter([
       { path: "*", Component: NotFoundPage },
     ],
   },
-
-  // ── 3D EXPERIENCE (fullscreen, outside Layout) ──
   {
     path: "/experience",
     Component: VirtualStore,
   },
-
-  // ── ADMIN (auth check inside AdminLayout) ──
   {
     path: "/admin",
     Component: AdminLayout,
@@ -73,6 +69,7 @@ export const router = createBrowserRouter([
       { path: "content", Component: AdminContent },
       { path: "settings", Component: AdminSettings },
       { path: "3d-params", Component: Admin3DParams },
+      { path: "stock", Component: AdminStockManager },
     ],
   },
 ]);

@@ -11,10 +11,12 @@ export function ExperienceLoadingScreen({ onEnter, dataReady }: Props) {
   const [fadeOut, setFadeOut] = useState(false);
 
   useEffect(() => {
-    // Animate progress bar
     const interval = setInterval(() => {
       setProgress((prev) => {
-        if (prev >= 100) { clearInterval(interval); return 100; }
+        if (prev >= 100) {
+          clearInterval(interval);
+          return 100;
+        }
         const increment = dataReady ? Math.random() * 12 + 8 : Math.random() * 6 + 2;
         return Math.min(prev + increment, dataReady ? 100 : 88);
       });
@@ -24,9 +26,10 @@ export function ExperienceLoadingScreen({ onEnter, dataReady }: Props) {
 
   useEffect(() => {
     if (progress >= 100) {
-      const t = setTimeout(() => setShowLangPicker(true), 400);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setShowLangPicker(true), 400);
+      return () => clearTimeout(timer);
     }
+    return undefined;
   }, [progress]);
 
   const handlePick = (lang: 'fr' | 'ar') => {
@@ -43,11 +46,10 @@ export function ExperienceLoadingScreen({ onEnter, dataReady }: Props) {
         opacity: fadeOut ? 0 : 1,
       }}
     >
-      {/* Stars background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
-        {Array.from({ length: 60 }).map((_, i) => (
+        {Array.from({ length: 60 }).map((_, index) => (
           <div
-            key={i}
+            key={index}
             className="absolute rounded-full bg-white"
             style={{
               width: Math.random() * 2 + 1,
@@ -62,11 +64,8 @@ export function ExperienceLoadingScreen({ onEnter, dataReady }: Props) {
         ))}
       </div>
 
-      {/* Brand logo block */}
       <div className="relative z-10 flex flex-col items-center gap-6 text-center px-6">
-        {/* Logo */}
         <div className="flex flex-col items-center gap-2">
-          {/* VERKING */}
           <div style={{ fontFamily: 'Montserrat, sans-serif' }}>
             <span
               className="font-black text-5xl md:text-7xl tracking-tight block text-center"
@@ -82,7 +81,6 @@ export function ExperienceLoadingScreen({ onEnter, dataReady }: Props) {
             </span>
           </div>
 
-          {/* S.T.P Stationery subtitle */}
           <div className="flex items-center gap-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
             <span
               className="font-black text-lg md:text-2xl tracking-[0.18em]"
@@ -108,13 +106,12 @@ export function ExperienceLoadingScreen({ onEnter, dataReady }: Props) {
           <div className="flex items-center gap-3 opacity-60 mt-1">
             <div className="h-px w-12 bg-gradient-to-r from-transparent to-white/40" />
             <span className="text-white/60 text-xs font-bold tracking-[0.3em] uppercase">
-              Virtual Showroom · 3D Experience
+              Virtual Store · 3D Experience
             </span>
             <div className="h-px w-12 bg-gradient-to-l from-transparent to-white/40" />
           </div>
         </div>
 
-        {/* Progress bar */}
         {!showLangPicker && (
           <div className="w-64 md:w-80 space-y-2 mt-4">
             <div className="h-1 rounded-full bg-white/10 overflow-hidden">
@@ -128,12 +125,11 @@ export function ExperienceLoadingScreen({ onEnter, dataReady }: Props) {
               />
             </div>
             <p className="text-white/40 text-xs tracking-widest font-medium">
-              {progress < 40 ? 'INITIALISATION…' : progress < 80 ? 'CHARGEMENT DE LA SCÈNE…' : 'PRESQUE PRÊT…'}
+              {progress < 40 ? 'INITIALISATION...' : progress < 80 ? 'CHARGEMENT DE LA SCENE...' : 'PRESQUE PRET...'}
             </p>
           </div>
         )}
 
-        {/* Language picker */}
         {showLangPicker && (
           <div
             className="flex flex-col items-center gap-6 mt-2"
@@ -152,7 +148,8 @@ export function ExperienceLoadingScreen({ onEnter, dataReady }: Props) {
                 }}
               >
                 <span className="relative z-10 flex items-center gap-2">
-                  <span className="text-lg">🇫🇷</span> Français
+                  <span className="text-lg">🇫🇷</span>
+                  Francais
                 </span>
               </button>
               <button
@@ -164,7 +161,8 @@ export function ExperienceLoadingScreen({ onEnter, dataReady }: Props) {
                 }}
               >
                 <span className="relative z-10 flex items-center gap-2">
-                  <span className="text-lg">🇩🇿</span> العربية
+                  <span className="text-lg">🇩🇿</span>
+                  العربية
                 </span>
               </button>
             </div>
@@ -172,7 +170,6 @@ export function ExperienceLoadingScreen({ onEnter, dataReady }: Props) {
         )}
       </div>
 
-      {/* Bottom brand stamp */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 opacity-20">
         <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
         <span className="text-white text-[10px] tracking-[0.4em] uppercase">
@@ -181,16 +178,18 @@ export function ExperienceLoadingScreen({ onEnter, dataReady }: Props) {
         <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
       </div>
 
-      <style>{`
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 0.1; }
-          50% { opacity: 0.7; }
-        }
-      `}</style>
+      <style>
+        {`
+          @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes pulse {
+            0%, 100% { opacity: 0.1; }
+            50% { opacity: 0.7; }
+          }
+        `}
+      </style>
     </div>
   );
 }

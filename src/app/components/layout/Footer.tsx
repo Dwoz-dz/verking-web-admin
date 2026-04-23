@@ -37,6 +37,8 @@ type ContentSettings = {
   instagram?: string;
 };
 
+const LOCAL_MAIN_LOGO = '/Logostp.png';
+
 function normalizeExternalUrl(value?: string) {
   const raw = (value || '').trim();
   if (!raw) return '';
@@ -110,21 +112,22 @@ export function Footer() {
       : (content.brand_story_fr || content.about_fr || '');
     return fromContent || tr('footer_desc', lang);
   }, [content, lang]);
+  const cleanBrandName = ((theme.logo_text || 'VERKING').replace(/\bSCOLAIRE\b/gi, '').replace(/\s+/g, ' ').trim()) || 'VERKING';
 
   const phone = content.phone || settings.phone || '+213 555 123 456';
-  const email = content.email || settings.email || 'contact@verking-scolaire.dz';
+  const email = content.email || settings.email || 'contact@verking-stationery.dz';
   const address = content.address || settings.address || 'Rue des Freres Belloul, Bordj El Bahri, Alger';
   const workingHours = content.working_hours || settings.working_hours || 'Dim-Jeu: 08h-18h | Ven-Sam: 09h-14h';
 
   const socialLinks = [
     {
       key: 'facebook',
-      href: normalizeExternalUrl(content.facebook || 'facebook.com/verking.scolaire'),
+      href: normalizeExternalUrl(content.facebook || 'facebook.com/verking.stationery'),
       icon: Facebook,
     },
     {
       key: 'instagram',
-      href: normalizeExternalUrl(content.instagram || 'instagram.com/verking.scolaire'),
+      href: normalizeExternalUrl(content.instagram || 'instagram.com/verking.stationery'),
       icon: Instagram,
     },
     {
@@ -134,13 +137,22 @@ export function Footer() {
     },
   ].filter((item) => Boolean(item.href));
 
+  const footerLogo = (theme.logo_url || '').trim() || LOCAL_MAIN_LOGO;
+
   return (
-    <footer style={{ backgroundColor: theme.primary_color }} className="text-white">
+    <footer
+      className="text-white relative overflow-hidden"
+      style={{ background: 'linear-gradient(145deg,#0f4f74 0%,#17618b 46%,#205e85 100%)' }}
+    >
+      <div className="absolute -top-24 right-16 w-72 h-72 rounded-full blur-[80px] pointer-events-none" style={{ background: 'radial-gradient(circle,rgba(255,122,46,0.32) 0%,transparent 72%)' }} />
+      <div className="absolute -bottom-24 -left-12 w-80 h-80 rounded-full blur-[90px] pointer-events-none" style={{ background: 'radial-gradient(circle,rgba(155,63,0,0.24) 0%,transparent 76%)' }} />
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           <div>
             <div className="mb-4">
-              <div className="font-black text-2xl tracking-tight">{theme.logo_text}</div>
+              <div className="rounded-2xl bg-white/10 backdrop-blur-xl px-3 py-2 inline-flex">
+                <img src={footerLogo} alt={cleanBrandName} className="h-11 w-auto object-contain" />
+              </div>
               <div className="text-sm opacity-70 tracking-widest font-medium mt-0.5">
                 {theme.logo_subtitle || 'STP STATIONERY'}
               </div>
@@ -221,9 +233,9 @@ export function Footer() {
         </div>
       </div>
 
-      <div className="border-t" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+      <div className="border-t" style={{ borderColor: 'rgba(255,255,255,0.14)' }}>
         <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs opacity-60">
-          <span>© {new Date().getFullYear()} {theme.logo_text} - {tr('rights', lang)}</span>
+          <span>© {new Date().getFullYear()} {cleanBrandName} - {tr('rights', lang)}</span>
           <span>{theme.logo_subtitle || 'STP Stationery'} | Made in Algeria</span>
         </div>
       </div>

@@ -108,6 +108,7 @@ export const ORDER_STATUSES = [
   { value: 'shipped', label_fr: 'Expédié', label_ar: 'تم الشحن', color: 'purple' },
   { value: 'delivered', label_fr: 'Livré', label_ar: 'تم التسليم', color: 'green' },
   { value: 'cancelled', label_fr: 'Annulé', label_ar: 'ملغى', color: 'red' },
+  { value: 'refunded', label_fr: 'Remboursé', label_ar: 'مسترد', color: 'red' },
 ];
 
 export const apiHeaders = adminHeaders;

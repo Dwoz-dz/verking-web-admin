@@ -97,6 +97,8 @@ app.get("/make-server-ea36795c/content", settings.getContent);
 app.put("/make-server-ea36795c/content", settings.updateContent);
 app.get("/make-server-ea36795c/theme", settings.getTheme);
 app.put("/make-server-ea36795c/theme", settings.updateTheme);
+app.get("/make-server-ea36795c/3d-config", settings.get3DConfig);
+app.put("/make-server-ea36795c/3d-config", settings.update3DConfig);
 app.get("/make-server-ea36795c/homepage-config", settings.getHomepageConfig);
 app.put("/make-server-ea36795c/homepage-config", settings.updateHomepageConfig);
 

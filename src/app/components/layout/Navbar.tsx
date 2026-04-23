@@ -23,6 +23,16 @@ type CategoryItem = {
   order?: number;
 };
 
+const LOCAL_MAIN_LOGO = '/Logostp.png';
+const LOCAL_PRODUCT_FALLBACK = '/verking-hero.png';
+
+function normalizeBrandSubtitle(value: string) {
+  const normalized = value.toUpperCase().replace(/\s+/g, ' ').trim();
+  if (!normalized) return 'S.T.P STATIONERY';
+  if (normalized.includes('STATIONERY')) return 'S.T.P STATIONERY';
+  return normalized.replace(/\b(S\.?T\.?P|STP)\b/g, 'S.T.P');
+}
+
 export function Navbar() {
   const { lang, setLang } = useLang();
   const { count } = useCart();
@@ -149,12 +159,85 @@ export function Navbar() {
     return () => window.clearTimeout(timer);
   }, [searchOpen, searchValue]);
 
-  const navLinks = [
-    { to: '/', label: tr('home', lang) },
-    { to: '/shop', label: tr('shop', lang) },
-    { to: '/wholesale', label: tr('wholesale', lang) },
-    { to: '/about', label: tr('about', lang) },
-    { to: '/contact', label: tr('contact', lang) },
+  // Each nav link carries its own glassy color palette.
+  //   * tint       — soft gloss used on the frosted pill when active
+  //   * border     — inner ring that gives the glass its edge
+  //   * glow       — drop shadow tint so active pill feels backlit
+  //   * text       — bold readable color on active state
+  //   * hoverText  — hover hint matching the palette family
+  //   * dot        — small accent pip that appears on the active pill
+  const navLinks: Array<{
+    to: string;
+    label: string;
+    accent: {
+      tint: string;
+      border: string;
+      glow: string;
+      text: string;
+      hoverText: string;
+      dot: string;
+    };
+  }> = [
+    {
+      to: '/',
+      label: tr('home', lang),
+      accent: {
+        tint: 'linear-gradient(135deg, rgba(59,130,246,0.35), rgba(37,99,235,0.22))',
+        border: 'rgba(96,165,250,0.55)',
+        glow: '0 10px 28px -14px rgba(37,99,235,0.55), inset 0 1px 0 rgba(255,255,255,0.7)',
+        text: '#1e3a8a',
+        hoverText: '#2563eb',
+        dot: '#3B82F6',
+      },
+    },
+    {
+      to: '/shop',
+      label: tr('shop', lang),
+      accent: {
+        tint: 'linear-gradient(135deg, rgba(251,146,60,0.36), rgba(249,115,22,0.22))',
+        border: 'rgba(251,146,60,0.55)',
+        glow: '0 10px 28px -14px rgba(249,115,22,0.55), inset 0 1px 0 rgba(255,255,255,0.7)',
+        text: '#9a3412',
+        hoverText: '#ea580c',
+        dot: '#F97316',
+      },
+    },
+    {
+      to: '/wholesale',
+      label: tr('wholesale', lang),
+      accent: {
+        tint: 'linear-gradient(135deg, rgba(52,211,153,0.34), rgba(16,185,129,0.22))',
+        border: 'rgba(52,211,153,0.55)',
+        glow: '0 10px 28px -14px rgba(16,185,129,0.55), inset 0 1px 0 rgba(255,255,255,0.7)',
+        text: '#065f46',
+        hoverText: '#059669',
+        dot: '#10B981',
+      },
+    },
+    {
+      to: '/about',
+      label: tr('about', lang),
+      accent: {
+        tint: 'linear-gradient(135deg, rgba(167,139,250,0.36), rgba(139,92,246,0.22))',
+        border: 'rgba(167,139,250,0.55)',
+        glow: '0 10px 28px -14px rgba(139,92,246,0.55), inset 0 1px 0 rgba(255,255,255,0.7)',
+        text: '#4c1d95',
+        hoverText: '#7c3aed',
+        dot: '#8B5CF6',
+      },
+    },
+    {
+      to: '/contact',
+      label: tr('contact', lang),
+      accent: {
+        tint: 'linear-gradient(135deg, rgba(251,113,133,0.34), rgba(244,63,94,0.22))',
+        border: 'rgba(251,113,133,0.55)',
+        glow: '0 10px 28px -14px rgba(244,63,94,0.55), inset 0 1px 0 rgba(255,255,255,0.7)',
+        text: '#881337',
+        hoverText: '#e11d48',
+        dot: '#F43F5E',
+      },
+    },
   ];
 
   const trendingSearches = useMemo(() => {
@@ -174,6 +257,10 @@ export function Navbar() {
   }, [categories]);
 
   const isActive = (path: string) => (path === '/' ? location.pathname === '/' : location.pathname.startsWith(path));
+  const logoUrl = (theme.logo_url || '').trim();
+  const activeMainLogo = logoUrl || LOCAL_MAIN_LOGO;
+  const primaryBrandText = sanitizeDisplayText(((theme.logo_text || 'VERKING').replace(/\bSCOLAIRE\b/gi, '').trim()) || 'VERKING');
+  const subtitleBrandText = normalizeBrandSubtitle(sanitizeDisplayText(theme.logo_subtitle || 'S.T.P STATIONERY'));
 
   const submitSearch = (value: string) => {
     const term = value.trim();
@@ -197,11 +284,11 @@ export function Navbar() {
   };
 
   const searchLabels = {
-    trending: lang === 'ar' ? 'Ø¹Ù…Ù„ÙŠØ§Øª Ø¨Ø­Ø« Ø±Ø§Ø¦Ø¬Ø©' : 'Recherches tendance',
-    categories: lang === 'ar' ? 'ÙØ¦Ø§Øª Ù…Ø´Ù‡ÙˆØ±Ø©' : 'Categories populaires',
-    suggestions: lang === 'ar' ? 'Ø§Ù‚ØªØ±Ø§Ø­Ø§Øª Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª' : 'Suggestions produits',
-    noResults: lang === 'ar' ? 'Ù„Ø§ ØªÙˆØ¬Ø¯ Ù†ØªØ§Ø¦Ø¬ Ø­Ø§Ù„ÙŠØ§' : 'Aucun produit trouve',
-    searchPlaceholder: lang === 'ar' ? 'Ø§Ø¨Ø­Ø« Ø¹Ù† Ù…Ù†ØªØ¬ Ø£Ùˆ ÙØ¦Ø©...' : 'Rechercher un produit ou une categorie...',
+    trending: lang === 'ar' ? 'عمليات بحث رائجة' : 'Recherches tendance',
+    categories: lang === 'ar' ? 'فئات مشهورة' : 'Categories populaires',
+    suggestions: lang === 'ar' ? 'اقتراحات المنتجات' : 'Suggestions produits',
+    noResults: lang === 'ar' ? 'لا توجد نتائج حاليا' : 'Aucun produit trouve',
+    searchPlaceholder: lang === 'ar' ? 'ابحث عن منتج أو فئة...' : 'Rechercher un produit ou une categorie...',
   };
 
   const renderSearchContent = (isMobile: boolean) => (
@@ -266,7 +353,7 @@ export function Navbar() {
                   className="flex w-full items-center gap-3 rounded-xl border border-gray-100 bg-white px-3 py-2 text-start transition-all hover:border-blue-200 hover:bg-blue-50"
                 >
                   <img
-                    src={product?.images?.[0] || 'https://images.unsplash.com/photo-1594608661623-aa0bd3a69d98?w=120&q=80'}
+                    src={product?.images?.[0] || LOCAL_PRODUCT_FALLBACK}
                     alt={productName}
                     className="h-11 w-11 rounded-lg object-cover"
                   />
@@ -280,7 +367,7 @@ export function Navbar() {
 
             {searching && (
               <p className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500">
-                {lang === 'ar' ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø¨Ø­Ø«...' : 'Recherche...'}
+                {lang === 'ar' ? 'جاري البحث...' : 'Recherche...'}
               </p>
             )}
 
@@ -297,71 +384,143 @@ export function Navbar() {
 
   return (
     <header
-      className={`fixed left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white shadow-md' : 'bg-white/95 backdrop-blur-sm'}`}
+      className="fixed left-0 right-0 z-50 transition-all duration-300 pointer-events-none"
       style={{ top: 'var(--vk-announcement-height, 0px)' }}
     >
-      <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
-        <Link to="/" className="flex flex-col leading-tight shrink-0 group">
+      <div className="container mx-auto px-3 md:px-4 pt-3 pb-0">
+        <div
+          className={`pointer-events-auto relative flex items-center justify-between gap-4 rounded-[1.6rem] px-3 md:px-5 py-3 md:py-3.5 transition-all duration-300 overflow-hidden ${
+            scrolled
+              ? 'backdrop-blur-2xl shadow-[0_28px_54px_-30px_rgba(22,38,69,0.55)]'
+              : 'backdrop-blur-xl shadow-[0_22px_46px_-30px_rgba(22,38,69,0.48)]'
+          }`}
+          style={{
+            // Layered frosted glass: soft multi-color bloom + milky base + inner ring
+            background: scrolled
+              ? 'linear-gradient(135deg, rgba(219,234,254,0.70) 0%, rgba(255,255,255,0.82) 35%, rgba(254,226,226,0.55) 100%)'
+              : 'linear-gradient(135deg, rgba(219,234,254,0.58) 0%, rgba(255,255,255,0.74) 40%, rgba(254,226,226,0.45) 100%)',
+            border: '1px solid rgba(255,255,255,0.55)',
+            boxShadow: scrolled
+              ? 'inset 0 1px 0 rgba(255,255,255,0.85), 0 28px 54px -30px rgba(22,38,69,0.55)'
+              : 'inset 0 1px 0 rgba(255,255,255,0.70), 0 22px 46px -30px rgba(22,38,69,0.48)',
+          }}
+        >
+          {/* Specular highlight sheen — top-left */}
           <div
-            className="flex items-baseline gap-[6px] transition-transform duration-300 group-hover:scale-[1.03] origin-left"
-            dir="ltr"
-            style={{ fontFamily: 'Montserrat, sans-serif' }}
-          >
-            <span
-              className="font-black text-2xl md:text-3xl tracking-tight"
-              style={{
-                background: 'linear-gradient(135deg, #1A3C6E 0%, #1D4ED8 55%, #0EA5E9 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}
-            >{theme.logo_text?.split(' ')[0] || 'VERKING'}</span>
-            <span
-              className="font-black text-2xl md:text-3xl tracking-tight"
-              style={{
-                background: 'linear-gradient(135deg, #F57C00 0%, #FFB300 60%, #FFD54F 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}
-            >{theme.logo_text?.split(' ').slice(1).join(' ') || 'SCOLAIRE'}</span>
+            aria-hidden
+            className="pointer-events-none absolute -top-12 -left-16 h-40 w-64 rounded-full opacity-60"
+            style={{
+              background: 'radial-gradient(closest-side, rgba(255,255,255,0.75), rgba(255,255,255,0))',
+              filter: 'blur(14px)',
+            }}
+          />
+          {/* Warm accent bloom — bottom-right */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -bottom-16 -right-20 h-48 w-72 rounded-full opacity-55"
+            style={{
+              background: 'radial-gradient(closest-side, rgba(251,191,36,0.35), rgba(251,191,36,0))',
+              filter: 'blur(18px)',
+            }}
+          />
+        <Link to="/" className="flex items-center gap-3 leading-tight shrink-0 group">
+          <div className="rounded-2xl p-1.5 bg-white/50 backdrop-blur-xl shadow-[0_16px_40px_-24px_rgba(16,97,139,0.5)]">
+            <img
+              src={activeMainLogo}
+              alt={primaryBrandText}
+              className="h-10 w-10 md:h-11 md:w-11 object-contain"
+            />
           </div>
-
-          <div className="flex items-center gap-1.5 mt-[2px]" dir="ltr">
+          <div className="min-w-0 flex flex-col" dir="ltr">
             <span
-              className="text-[9px] md:text-[10px] font-black tracking-[0.3em]"
+              className="font-black text-2xl md:text-[2rem] leading-none tracking-tight"
               style={{
-                background: 'linear-gradient(90deg, #EF4444, #F97316)',
+                color: '#1d4ed8',
+                backgroundImage: 'linear-gradient(90deg, #1d4ed8 0%, #2563eb 38%, #ff7a2e 72%, #dc2626 100%)',
                 WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                textShadow: '0 6px 16px rgba(29,78,216,0.18)',
               }}
             >
-              S.T.P
+              {primaryBrandText}
             </span>
-            <span className="w-px h-2.5 rounded-full" style={{ background: 'linear-gradient(180deg,#F97316,#1D4ED8)' }} />
-            <span
-              className="font-semibold tracking-[0.22em] text-[14px]"
-              style={{ color: '#6B7280', fontFamily: 'Inter, sans-serif' }}
-            >{sanitizeDisplayText(theme.logo_subtitle, 'STATIONERY')}</span>
+            <span className="mt-1 text-[10px] md:text-[11px] font-bold tracking-[0.22em] text-[#4d6d95] whitespace-nowrap">
+              {subtitleBrandText}
+            </span>
           </div>
         </Link>
 
-        <nav className="hidden lg:flex items-center gap-1">
-          {navLinks.map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                isActive(link.to)
-                  ? 'text-white'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-              }`}
-              style={isActive(link.to) ? { backgroundColor: theme.primary_color } : {}}
-            >
-              {link.label}
-            </Link>
-          ))}
+        <nav
+          className="relative hidden lg:flex items-center gap-1 rounded-full p-1 z-10"
+          style={{
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.62), rgba(255,255,255,0.38))',
+            border: '1px solid rgba(255,255,255,0.60)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.75), 0 6px 18px -14px rgba(16,45,84,0.35)',
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
+          }}
+        >
+          {navLinks.map((link) => {
+            const active = isActive(link.to);
+            const accent = link.accent;
+
+            return (
+              <Link
+                key={link.to}
+                to={link.to}
+                className={`group relative flex items-center gap-1.5 rounded-full px-4 py-2 text-[14px] font-semibold tracking-[0.01em] transition-all duration-200`}
+                style={
+                  active
+                    ? {
+                        background: accent.tint,
+                        border: `1px solid ${accent.border}`,
+                        boxShadow: accent.glow,
+                        color: accent.text,
+                        backdropFilter: 'blur(10px)',
+                        WebkitBackdropFilter: 'blur(10px)',
+                      }
+                    : {
+                        background: 'transparent',
+                        border: '1px solid transparent',
+                        color: '#4a607c',
+                      }
+                }
+                onMouseEnter={(event) => {
+                  if (!active) {
+                    const el = event.currentTarget as HTMLElement;
+                    el.style.background = accent.tint;
+                    el.style.border = `1px solid ${accent.border}`;
+                    el.style.color = accent.hoverText;
+                    el.style.backdropFilter = 'blur(10px)';
+                    (el.style as any).WebkitBackdropFilter = 'blur(10px)';
+                  }
+                }}
+                onMouseLeave={(event) => {
+                  if (!active) {
+                    const el = event.currentTarget as HTMLElement;
+                    el.style.background = 'transparent';
+                    el.style.border = '1px solid transparent';
+                    el.style.color = '#4a607c';
+                    el.style.backdropFilter = '';
+                    (el.style as any).WebkitBackdropFilter = '';
+                  }
+                }}
+              >
+                {active && (
+                  <span
+                    aria-hidden
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{
+                      background: accent.dot,
+                      boxShadow: `0 0 8px ${accent.dot}`,
+                    }}
+                  />
+                )}
+                <span className="relative">{link.label}</span>
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -371,30 +530,36 @@ export function Navbar() {
             aria-label="Switch language"
           >
             <Globe size={15} />
-            <span>{lang === 'fr' ? 'Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©' : 'FR'}</span>
+            <span>{lang === 'fr' ? 'العربية' : 'FR'}</span>
           </button>
 
           <div className="relative hidden sm:block" ref={desktopSearchRef}>
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              value={searchValue}
-              onFocus={() => setSearchOpen(true)}
-              onChange={(event) => {
-                setSearchValue(event.target.value);
-                setSearchOpen(true);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  submitSearch(searchValue);
-                }
-              }}
-              placeholder={searchLabels.searchPlaceholder}
-              className="w-40 md:w-56 rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-xs font-medium text-gray-700 outline-none transition-all focus:border-blue-200 focus:ring-2 focus:ring-blue-100"
-            />
+            <button
+              onClick={() => setSearchOpen((prev) => !prev)}
+              className="flex items-center justify-center w-9 h-9 text-gray-600 hover:text-[#17618b] hover:bg-gray-100 rounded-lg transition-all"
+              aria-label="Toggle search"
+            >
+              <Search size={17} />
+            </button>
 
             {searchOpen && (
               <div className="absolute top-full right-0 mt-2 w-[min(34rem,85vw)] rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl">
+                <div className="relative mb-3">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={searchValue}
+                    onChange={(event) => setSearchValue(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        submitSearch(searchValue);
+                      }
+                    }}
+                    autoFocus
+                    placeholder={searchLabels.searchPlaceholder}
+                    className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-xs font-medium text-gray-700 outline-none transition-all focus:border-blue-200 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
                 {renderSearchContent(false)}
               </div>
             )}
@@ -408,134 +573,198 @@ export function Navbar() {
             <Search size={16} />
           </button>
 
-          <Link to="/cart" className="relative flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm transition-all" style={{ backgroundColor: `${theme.accent_color}15`, color: theme.accent_color }}>
-            <ShoppingCart size={18} />
+          <Link
+            to="/cart"
+            className="relative inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 sm:px-4 py-2 text-[13px] font-bold tracking-[0.01em] transition-all duration-200"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(253,224,71,0.42), rgba(251,191,36,0.26))',
+              border: '1px solid rgba(251,191,36,0.55)',
+              color: '#92400e',
+              boxShadow:
+                '0 10px 28px -14px rgba(217,119,6,0.55), inset 0 1px 0 rgba(255,255,255,0.75)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+            }}
+            aria-label={lang === 'ar' ? 'السلة' : 'Panier'}
+          >
+            <ShoppingCart size={16} className="text-amber-700" />
             <span className="hidden sm:inline">{tr('cart', lang)}</span>
             {count > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 text-white text-xs rounded-full flex items-center justify-center font-bold" style={{ backgroundColor: theme.accent_color }}>
-                {count > 9 ? '9+' : count}
+              <span
+                className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[10px] font-black text-white shadow-lg"
+                style={{
+                  background:
+                    'linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #b91c1c 100%)',
+                  boxShadow:
+                    '0 4px 10px -2px rgba(220,38,38,0.55), inset 0 1px 0 rgba(255,255,255,0.6)',
+                }}
+              >
+                {count > 99 ? '99+' : count}
               </span>
             )}
           </Link>
 
           <Link
-            to="/experience"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs text-white transition-all hover:scale-[1.04] shadow-md shrink-0"
+            to="/3d-store"
+            className="relative hidden sm:inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold tracking-[0.01em] transition-all duration-200"
             style={{
-              background: 'linear-gradient(135deg,#0d1b35,#1A3C6E)',
-              border: '1px solid rgba(255,215,0,0.25)',
+              background:
+                'linear-gradient(135deg, rgba(99,102,241,0.38), rgba(79,70,229,0.28), rgba(67,56,202,0.22))',
+              border: '1px solid rgba(129,140,248,0.55)',
+              color: '#ffffff',
+              boxShadow:
+                '0 10px 28px -14px rgba(79,70,229,0.65), inset 0 1px 0 rgba(255,255,255,0.55)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
             }}
-            title={lang === 'ar' ? 'معرض 3D' : 'Showroom 3D'}
+            aria-label={lang === 'ar' ? 'المتجر ثلاثي الأبعاد' : '3D Store'}
           >
-            <span style={{ color: '#FFD700', fontSize: 12 }}>✦</span>
-            <span className="hidden md:inline">{lang === 'ar' ? 'معرض 3D' : '3D Store'}</span>
+            <span
+              aria-hidden
+              className="absolute inset-0 rounded-full pointer-events-none opacity-70"
+              style={{
+                background:
+                  'radial-gradient(circle at 20% 20%, rgba(253,224,71,0.35), transparent 55%)',
+              }}
+            />
+            <Shield size={14} className="relative text-amber-200 drop-shadow" />
+            <span className="relative">{lang === 'ar' ? '3D' : '3D Store'}</span>
           </Link>
 
           <Link
-            to="/admin"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-sm text-white transition-all hover:opacity-90 shadow-md"
-            style={{ backgroundColor: theme.primary_color }}
-            title="Admin Panel"
+            to="/admin/login"
+            className="relative inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 sm:px-4 py-2 text-[13px] font-black tracking-[0.08em] uppercase transition-all duration-200"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(15,23,42,0.92) 0%, rgba(30,58,138,0.88) 55%, rgba(15,23,42,0.92) 100%)',
+              border: '1px solid rgba(148,163,184,0.55)',
+              color: '#fde68a',
+              boxShadow:
+                '0 10px 28px -14px rgba(15,23,42,0.85), inset 0 1px 0 rgba(255,255,255,0.35)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+            }}
+            aria-label={lang === 'ar' ? 'لوحة الإدارة' : 'Admin'}
+            title={lang === 'ar' ? 'دخول الإدارة' : 'Accès Admin'}
           >
-            <Shield size={16} />
-            <span className="hidden md:inline">Admin</span>
+            <span
+              aria-hidden
+              className="absolute inset-0 rounded-full pointer-events-none opacity-60"
+              style={{
+                background:
+                  'radial-gradient(circle at 18% 22%, rgba(253,224,71,0.35), transparent 55%)',
+              }}
+            />
+            <Shield size={14} className="relative text-amber-300 drop-shadow" />
+            <span className="relative hidden sm:inline">{lang === 'ar' ? 'الإدارة' : 'ADMIN'}</span>
           </Link>
 
           <button
-            onClick={() => {
-              setMenuOpen((prev) => {
-                const next = !prev;
-                if (!next) setSearchOpen(false);
-                return next;
-              });
+            type="button"
+            onClick={() => setMenuOpen((prev) => !prev)}
+            className="lg:hidden inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-gray-700 hover:bg-gray-100 transition-all"
+            style={{
+              background: 'rgba(255,255,255,0.55)',
+              border: '1px solid rgba(255,255,255,0.7)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
             }}
-            className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
-            aria-label="Toggle menu"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
           >
-            {menuOpen ? <X size={22} /> : <Menu size={22} />}
+            {menuOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
+        </div>
         </div>
       </div>
 
+      {/* Mobile drawer */}
       {menuOpen && (
-        <div className="lg:hidden bg-white border-t border-gray-100 shadow-lg">
-          <nav className="container mx-auto px-4 py-3 flex flex-col gap-1">
-            <div className="mb-3">
-              <button
-                onClick={() => setLang(lang === 'fr' ? 'ar' : 'fr')}
-                className="w-full flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700"
-              >
-                <Globe size={15} />
-                <span>{lang === 'fr' ? 'Switch to Arabic' : 'Passer en Francais'}</span>
-              </button>
+        <div
+          className="lg:hidden pointer-events-auto fixed inset-x-0 top-[calc(var(--vk-announcement-height,0px)+88px)] z-40 mx-3 rounded-2xl border border-white/60 bg-white/95 p-4 shadow-2xl backdrop-blur-xl"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0) + 1rem)' }}
+        >
+          <div className="mb-3 flex items-center gap-2">
+            <Search size={15} className="absolute left-6 top-[calc(var(--vk-announcement-height,0px)+108px)] text-gray-400 hidden" />
+            <div className="relative flex-1">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                ref={mobileSearchInputRef}
+                value={searchValue}
+                onChange={(event) => setSearchValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    submitSearch(searchValue);
+                  }
+                }}
+                placeholder={searchLabels.searchPlaceholder}
+                className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm font-medium text-gray-700 outline-none transition-all focus:border-blue-200 focus:ring-2 focus:ring-blue-100"
+              />
             </div>
+            <button
+              type="button"
+              onClick={() => setLang(lang === 'fr' ? 'ar' : 'fr')}
+              className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-xl bg-gray-100 text-gray-700"
+              aria-label="Switch language"
+            >
+              <Globe size={15} />
+            </button>
+          </div>
 
-            <div className="sm:hidden mb-3 space-y-3">
-              <div className="relative">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  ref={mobileSearchInputRef}
-                  value={searchValue}
-                  onFocus={() => setSearchOpen(true)}
-                  onChange={(event) => {
-                    setSearchValue(event.target.value);
-                    setSearchOpen(true);
+          <nav className="mb-3 flex flex-col gap-1">
+            {navLinks.map((link) => {
+              const active = isActive(link.to);
+              return (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-sm font-bold"
+                  style={{
+                    background: active ? link.accent.tint : 'transparent',
+                    border: active
+                      ? `1px solid ${link.accent.border}`
+                      : '1px solid transparent',
+                    color: active ? link.accent.text : '#4a607c',
                   }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      submitSearch(searchValue);
-                    }
-                  }}
-                  placeholder={searchLabels.searchPlaceholder}
-                  className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm font-medium text-gray-700 outline-none transition-all focus:border-blue-200 focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-
-              {searchOpen && (
-                <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
-                  {renderSearchContent(true)}
-                </div>
-              )}
-            </div>
-
-            {navLinks.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                className={`px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                  isActive(link.to) ? 'text-white' : 'text-gray-700 hover:bg-gray-50'
-                }`}
-                style={isActive(link.to) ? { backgroundColor: theme.primary_color } : {}}
-              >
-                {link.label}
-              </Link>
-            ))}
-
+                >
+                  <span className="flex items-center gap-2">
+                    <span
+                      aria-hidden
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: link.accent.dot }}
+                    />
+                    {link.label}
+                  </span>
+                  <ChevronRight size={14} className="opacity-60" />
+                </Link>
+              );
+            })}
             <Link
-              to="/experience"
-              className="px-4 py-3 rounded-lg text-sm font-bold text-white flex items-center gap-2 mt-1"
+              to="/admin/login"
+              onClick={() => setMenuOpen(false)}
+              className="mt-1 flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-sm font-black uppercase tracking-[0.08em]"
               style={{
-                background: 'linear-gradient(135deg,#0d1b35,#1A3C6E)',
-                border: '1px solid rgba(255,215,0,0.2)',
+                background:
+                  'linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(30,58,138,0.92) 55%, rgba(15,23,42,0.95) 100%)',
+                border: '1px solid rgba(148,163,184,0.55)',
+                color: '#fde68a',
+                boxShadow:
+                  '0 10px 28px -14px rgba(15,23,42,0.85), inset 0 1px 0 rgba(255,255,255,0.35)',
               }}
             >
-              <span style={{ color: '#FFD700' }}>✦</span>
-              {lang === 'ar' ? '✦ معرض 3D' : '✦ Showroom 3D'}
-            </Link>
-
-            <Link
-              to="/admin"
-              className="px-4 py-3 rounded-lg text-sm font-bold text-white flex items-center gap-2 mt-1"
-              style={{ backgroundColor: theme.primary_color }}
-            >
-              <Shield size={16} />
-              Admin
+              <span className="flex items-center gap-2">
+                <Shield size={14} className="text-amber-300" />
+                {lang === 'ar' ? 'الإدارة' : 'Admin'}
+              </span>
+              <ChevronRight size={14} className="opacity-70" />
             </Link>
           </nav>
+
+          {renderSearchContent(true)}
         </div>
       )}
     </header>
   );
 }
-

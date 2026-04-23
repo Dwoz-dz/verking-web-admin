@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Save, Lock, Eye, EyeOff, Info, Store, Phone, Mail, MapPin, Globe, CreditCard, Truck, ShieldCheck, LayoutPanelLeft, Zap, X } from 'lucide-react';
+import { Save, Lock, Eye, EyeOff, Info, Store, Phone, Mail, MapPin, Globe, CreditCard, Truck, ShieldCheck, LayoutPanelLeft, Zap, X, Settings as SettingsIcon, RefreshCw, Sparkles } from 'lucide-react';
 import { adminApi, API_BASE, apiHeaders } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useAdminUI } from '../../context/AdminUIContext';
 import { toast } from 'sonner';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 
 function Field({ label, value, onChange, placeholder = '', type = 'text', dir, icon: Icon, description }: {
   label: string; value: string; onChange: (v: string) => void;
@@ -115,29 +115,58 @@ export function AdminSettings() {
   );
 
   return (
-    <div className="space-y-12 max-w-5xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className={`text-3xl font-black ${t.text} tracking-tight`}>Configuration</h1>
-          <p className={`text-sm ${t.textMuted} mt-1`}>Contرôle centralisé de l'écosystème Verking</p>
+    <div className="space-y-10 max-w-5xl">
+      {/* Premium header — mobile-first, touch-safe (44px+), Capacitor-ready */}
+      <motion.div
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: 'easeOut' }}
+        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div className="flex items-center gap-4 min-w-0">
+          <motion.div
+            initial={{ rotate: -8, scale: 0.85 }}
+            animate={{ rotate: 0, scale: 1 }}
+            transition={{ duration: 0.5, ease: 'backOut' }}
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl shadow-lg shadow-slate-900/30"
+            style={{ background: 'linear-gradient(135deg, #334155 0%, #0f172a 100%)' }}
+          >
+            <SettingsIcon size={26} className="text-white drop-shadow" />
+          </motion.div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className={`text-2xl sm:text-3xl font-black ${t.text} tracking-tight`}>Configuration</h1>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-700 ring-1 ring-emerald-200">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                </span>
+                Sync OK
+              </span>
+            </div>
+            <p className={`text-xs sm:text-sm ${t.textMuted} mt-1`}>
+              Contrôle centralisé de l'écosystème Verking
+            </p>
+          </div>
         </div>
-        <button 
-          onClick={handleSaveStore} disabled={savingStore || loadingStore}
-          className={`flex items-center gap-3 px-8 py-3.5 ${savingStore ? 'bg-emerald-500' : 'bg-[#1A3C6E]'} hover:bg-[#0d2447] text-white font-black rounded-2xl text-sm transition-all shadow-xl shadow-blue-900/20 active:scale-95`}
+        <button
+          onClick={handleSaveStore}
+          disabled={savingStore || loadingStore}
+          className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-black text-white shadow-xl shadow-blue-900/20 transition-all active:scale-[0.97] disabled:opacity-60 ${savingStore ? 'bg-emerald-500' : 'bg-[#1A3C6E] hover:bg-[#0d2447]'}`}
         >
-          {savingStore ? <ShieldCheck size={18} /> : <Save size={18} />}
-          {savingStore ? 'Sauvegardé' : 'Enregistrer tout'}
+          {savingStore ? <ShieldCheck size={18} /> : loadingStore ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
+          <span>{savingStore ? 'Sauvegardé' : loadingStore ? 'Chargement...' : 'Enregistrer tout'}</span>
         </button>
-      </div>
+      </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Column: Main Settings */}
         <div className="lg:col-span-8 space-y-8">
-          
+
           {/* Identity Section */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`${t.card} border ${t.cardBorder} rounded-[2.5rem] p-10 shadow-sm overflow-hidden relative group`}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`${t.card} border ${t.cardBorder} rounded-[2.5rem] p-6 sm:p-10 shadow-sm overflow-hidden relative group`}>
             {sectionHeader("Identité Commerciale", "Comment vos clients vous perçoivent", Store, "bg-blue-600")}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8">
                <Field label="Nom Public" value={storeSettings.store_name || ''} onChange={v => setStoreSettings(s => ({ ...s, store_name: v }))} placeholder="VERKING SCOLAIRE" icon={Store} />
                <Field label="Slogan / Sous-marque" value={storeSettings.store_subtitle || ''} onChange={v => setStoreSettings(s => ({ ...s, store_subtitle: v }))} placeholder="STP Stationery" />
                <Field label="Assistance Téléphonique" value={storeSettings.phone || ''} onChange={v => setStoreSettings(s => ({ ...s, phone: v }))} placeholder="+213 555 123 456" icon={Phone} type="tel" />
@@ -149,13 +178,13 @@ export function AdminSettings() {
           </motion.div>
 
           {/* Shipping & Commerce */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={`${t.card} border ${t.cardBorder} rounded-[2.5rem] p-10 shadow-sm group`}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={`${t.card} border ${t.cardBorder} rounded-[2.5rem] p-6 sm:p-10 shadow-sm group`}>
             {sectionHeader("Commerce & Logistique", "Paramètres monétaires et livraison", Truck, "bg-emerald-600")}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 mb-8">
                <Field label="Frais de livraison (DA)" value={String(storeSettings.shipping_fee || '')} onChange={v => setStoreSettings(s => ({ ...s, shipping_fee: v }))} placeholder="500" type="number" icon={Truck} description="Montant forfaitaire par commande" />
                <Field label="Seuil Gratuité (DA)" value={String(storeSettings.free_shipping_threshold || '')} onChange={v => setStoreSettings(s => ({ ...s, free_shipping_threshold: v }))} placeholder="5000" type="number" icon={Zap} description="Livraison gratuite au-delà de ce montant" />
             </div>
-            
+
             <div className={`p-6 rounded-[2rem] bg-gray-50 dark:bg-blue-950/20 border ${t.cardBorder} flex flex-col gap-4`}>
                <h4 className={`text-[10px] font-black uppercase tracking-widest ${t.textMuted}`}>Modes de paiement supportés</h4>
                <div className="flex flex-wrap gap-2">
@@ -167,9 +196,9 @@ export function AdminSettings() {
           </motion.div>
 
           {/* Social Media */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className={`${t.card} border ${t.cardBorder} rounded-[2.5rem] p-10 shadow-sm group`}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className={`${t.card} border ${t.cardBorder} rounded-[2.5rem] p-6 sm:p-10 shadow-sm group`}>
             {sectionHeader("Réseaux Sociaux", "Connectez vos communautés", Globe, "bg-orange-500")}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8">
                <Field label="WhatsApp Business" value={storeSettings.whatsapp || ''} onChange={v => setStoreSettings(s => ({ ...s, whatsapp: v }))} placeholder="+213..." icon={Phone} />
                <Field label="Instagram" value={storeSettings.instagram || ''} onChange={v => setStoreSettings(s => ({ ...s, instagram: v }))} placeholder="URL de votre profil" icon={Globe} />
                <Field label="Facebook" value={storeSettings.facebook || ''} onChange={v => setStoreSettings(s => ({ ...s, facebook: v }))} placeholder="URL de votre page" icon={Globe} />
@@ -180,22 +209,22 @@ export function AdminSettings() {
 
         {/* Right Column: Security & Info */}
         <div className="lg:col-span-4 space-y-8">
-           
+
            {/* Security */}
-           <div className={`p-8 rounded-[2.5rem] ${t.card} border ${t.cardBorder} shadow-lg relative overflow-hidden`}>
+           <div className={`p-6 sm:p-8 rounded-[2.5rem] ${t.card} border ${t.cardBorder} shadow-lg relative overflow-hidden`}>
               <div className="absolute top-0 right-0 p-4">
                  <ShieldCheck className="text-emerald-500/20" size={80} />
               </div>
               <h3 className={`text-lg font-black ${t.text} mb-6 flex items-center gap-2`}>
                  <Lock size={18} /> Sécurité Accès
               </h3>
-              
+
               <form onSubmit={handlePasswordChange} className="space-y-6">
                  <div>
                     <label className={`block text-[10px] font-black uppercase mb-2 ${t.textMuted}`}>Nouveau mot de passe</label>
                     <div className="relative">
                        <input type={showPass ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} className={`w-full px-5 py-3 ${t.input} border rounded-2xl text-sm font-bold outline-none`} />
-                       <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
+                       <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 min-h-[44px] min-w-[44px] flex items-center justify-center">
                           {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                        </button>
                     </div>
@@ -204,8 +233,8 @@ export function AdminSettings() {
                     <label className={`block text-[10px] font-black uppercase mb-2 ${t.textMuted}`}>Confirmer le code</label>
                     <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={`w-full px-5 py-3 ${t.input} border rounded-2xl text-sm font-bold outline-none`} />
                  </div>
-                 
-                 <button type="submit" disabled={savingPass || !newPassword} className="w-full py-4 bg-gray-900 dark:bg-blue-600 text-white font-black rounded-2xl text-sm hover:scale-[1.02] transition-transform active:scale-95 disabled:opacity-50 shadow-xl">
+
+                 <button type="submit" disabled={savingPass || !newPassword} className="w-full min-h-[44px] py-4 bg-gray-900 dark:bg-blue-600 text-white font-black rounded-2xl text-sm hover:scale-[1.02] transition-transform active:scale-95 disabled:opacity-50 shadow-xl">
                     {savingPass ? 'Mise à jour...' : 'Confirmer le changement'}
                  </button>
                  <p className={`text-[10px] text-center ${t.textMuted}`}>⚠️ Déconnexion immédiate après changement.</p>
@@ -213,7 +242,7 @@ export function AdminSettings() {
            </div>
 
            {/* Architecture Info */}
-           <div className={`p-8 rounded-[2.5rem] bg-[#1A3C6E] text-white shadow-2xl relative overflow-hidden group`}>
+           <div className={`p-6 sm:p-8 rounded-[2.5rem] bg-[#1A3C6E] text-white shadow-2xl relative overflow-hidden group`}>
               <LayoutPanelLeft className="absolute -bottom-4 -right-4 text-white/5 group-hover:rotate-12 transition-transform duration-700" size={140} />
               <div className="relative">
                  <h3 className="text-lg font-black mb-4 flex items-center gap-2">
@@ -225,7 +254,7 @@ export function AdminSettings() {
                       ['Backend', 'Hono + Supabase'],
                       ['Database', 'Supabase KV Store'],
                       ['Assets', 'Supabase CDN'],
-                      ['Mobile', 'Ready (API REST)'],
+                      ['Mobile', 'Capacitor-ready (APK/iOS)'],
                       ['Update', 'OTA Cloud Sync']
                     ].map(([label, val]) => (
                       <div key={label} className="flex items-center justify-between py-2 border-b border-white/10">
@@ -234,22 +263,22 @@ export function AdminSettings() {
                       </div>
                     ))}
                  </div>
-                 
+
                  <div className="mt-8 flex gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center">
                        <ShieldCheck size={20} className="text-blue-300" />
                     </div>
                     <p className="text-[10px] font-medium text-white/70 leading-relaxed italic">
-                       "Système Verging hautement sécurisé avec synchronisation en temps réel."
+                       "Système Verking hautement sécurisé avec synchronisation en temps réel."
                     </p>
                  </div>
               </div>
            </div>
 
            {/* Logout Zone */}
-           <button 
+           <button
               onClick={logout}
-              className="w-full p-6 rounded-[2.5rem] bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 text-red-600 flex items-center justify-center gap-3 font-black hover:bg-red-100 transition-colors group"
+              className="w-full min-h-[44px] p-6 rounded-[2.5rem] bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 text-red-600 flex items-center justify-center gap-3 font-black hover:bg-red-100 transition-colors group"
            >
               <span>Terminer la session</span>
               <X size={20} className="group-hover:rotate-90 transition-transform" />

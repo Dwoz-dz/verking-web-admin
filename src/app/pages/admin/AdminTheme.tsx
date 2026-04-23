@@ -16,6 +16,7 @@ import {
   BadgeCheck,
   Brush,
 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { adminApi } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -370,18 +371,46 @@ export function AdminTheme() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className={`text-3xl font-black ${t.text}`}>Theme Studio</h1>
-          <p className={`mt-1 text-sm ${t.textMuted}`}>
-            Brand identity, design tokens, import/export et preview lab web + mobile.
-          </p>
+      <motion.div
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: 'easeOut' }}
+        className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
+      >
+        <div className="flex items-center gap-3">
+          <motion.div
+            initial={{ scale: 0.85, rotate: -8, opacity: 0 }}
+            animate={{ scale: 1, rotate: 0, opacity: 1 }}
+            transition={{ duration: 0.5, ease: 'easeOut', delay: 0.05 }}
+            className="flex h-12 w-12 items-center justify-center rounded-2xl shadow-lg ring-1 ring-white/50"
+            style={{
+              background:
+                'linear-gradient(135deg, #d946ef 0%, #9333ea 45%, #4338ca 100%)',
+              boxShadow:
+                '0 10px 24px -8px rgba(147, 51, 234, 0.55), inset 0 1px 0 rgba(255,255,255,0.65)',
+            }}
+          >
+            <Palette size={24} className="text-white drop-shadow" />
+          </motion.div>
+          <div>
+            <h1 className={`text-2xl sm:text-3xl font-black leading-tight ${t.text}`}>Theme Studio</h1>
+            <p className={`mt-0.5 text-xs sm:text-sm ${t.textMuted}`}>
+              Brand identity, design tokens, import/export &amp; preview lab web + mobile.
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-fuchsia-50 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-fuchsia-700 ring-1 ring-fuchsia-200">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-fuchsia-400 opacity-70" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-fuchsia-500" />
+            </span>
+            Live Theme
+          </span>
           <button
             type="button"
             onClick={duplicateCurrentTheme}
-            className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-100"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98] transition"
           >
             <Copy size={14} />
             Dupliquer
@@ -389,7 +418,7 @@ export function AdminTheme() {
           <button
             type="button"
             onClick={rollbackTheme}
-            className="inline-flex items-center gap-1 rounded-xl border border-orange-200 px-3 py-2 text-xs font-bold text-orange-700 hover:bg-orange-50"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50/60 px-3 py-2 text-xs font-bold text-orange-700 hover:bg-orange-50 active:scale-[0.98] transition"
           >
             <RotateCcw size={14} />
             Rollback
@@ -398,13 +427,19 @@ export function AdminTheme() {
             type="button"
             onClick={publishTheme}
             disabled={publishing}
-            className="inline-flex items-center gap-1 rounded-xl bg-[#1A3C6E] px-3 py-2 text-xs font-black text-white disabled:opacity-60"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black text-white shadow-lg disabled:opacity-60 active:scale-[0.98] transition"
+            style={{
+              background:
+                'linear-gradient(135deg, #d946ef 0%, #9333ea 50%, #4338ca 100%)',
+              boxShadow:
+                '0 10px 24px -8px rgba(147, 51, 234, 0.55), inset 0 1px 0 rgba(255,255,255,0.4)',
+            }}
           >
-            <Save size={14} />
+            {publishing ? <Sparkles size={14} className="animate-pulse" /> : <Save size={14} />}
             {publishing ? 'Publication...' : 'Publish theme'}
           </button>
         </div>
-      </div>
+      </motion.div>
 
       <div className="grid gap-6 xl:grid-cols-[260px_1fr]">
         <div className={`${t.card} ${t.cardBorder} rounded-2xl border p-3 shadow-sm`}>
