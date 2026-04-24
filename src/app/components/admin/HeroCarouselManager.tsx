@@ -781,6 +781,28 @@ export function HeroCarouselManager() {
                 />
               </div>
 
+              {/* Show text overlay toggle */}
+              <label className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/70 px-4 py-3 mb-4 cursor-pointer hover:bg-slate-50 transition-colors">
+                <span className="flex flex-col">
+                  <span className="text-sm font-semibold text-slate-800">
+                    Afficher le texte et le bouton
+                  </span>
+                  <span className="text-xs text-slate-500 font-arabic" dir="rtl">
+                    إظهار النص والزر
+                  </span>
+                </span>
+                <span className="relative inline-flex h-6 w-11 shrink-0">
+                  <input
+                    type="checkbox"
+                    className="peer sr-only"
+                    checked={editing.text_panel.show_text_overlay !== false}
+                    onChange={(e) => patchPanel({ show_text_overlay: e.target.checked })}
+                  />
+                  <span className="absolute inset-0 rounded-full bg-slate-300 peer-checked:bg-indigo-500 transition-colors" />
+                  <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+                </span>
+              </label>
+
               {/* Text panel editor */}
               <div className="rounded-2xl border border-slate-200 p-3 mb-5 bg-slate-50/60">
                 <p className="text-[11px] font-black uppercase tracking-widest text-slate-700 mb-2">

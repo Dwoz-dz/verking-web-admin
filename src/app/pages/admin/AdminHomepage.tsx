@@ -23,6 +23,8 @@ import {
   Plus,
   Trash2,
   Star as StarIcon,
+  GripVertical,
+  AlertTriangle,
 } from 'lucide-react';
 import { adminApi, api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -81,6 +83,14 @@ type TestimonialItem = {
   rating: number;
 };
 
+type PromoImage = {
+  id: string;
+  image_url: string;
+  title_fr: string;
+  title_ar: string;
+  link: string;
+};
+
 type HomepageSection = {
   enabled: boolean;
   title_fr: string;
@@ -97,6 +107,7 @@ type HomepageSection = {
   limit?: number;
   trust_items?: TrustItem[];
   testimonial_items?: TestimonialItem[];
+  promo_images?: PromoImage[];
 };
 
 const TRUST_ICON_OPTIONS: Array<{ value: string; label: string }> = [
@@ -257,6 +268,30 @@ const DEFAULT_TESTIMONIAL_ITEMS: TestimonialItem[] = [
   },
 ];
 
+const DEFAULT_PROMO_IMAGES: PromoImage[] = [
+  {
+    id: 'promo-img-1',
+    image_url: '',
+    title_fr: 'Pack rentrée scolaire',
+    title_ar: 'حزمة الدخول المدرسي',
+    link: '/shop?promo=true',
+  },
+  {
+    id: 'promo-img-2',
+    image_url: '',
+    title_fr: 'Fournitures premium',
+    title_ar: 'أدوات مكتبية فاخرة',
+    link: '/shop?promo=true',
+  },
+  {
+    id: 'promo-img-3',
+    image_url: '',
+    title_fr: 'Offres limitées',
+    title_ar: 'عروض محدودة',
+    link: '/shop?promo=true',
+  },
+];
+
 const DEFAULT_CONFIG: HomepageConfig = {
   sections_order: [
     'hero',
@@ -319,9 +354,15 @@ const DEFAULT_CONFIG: HomepageConfig = {
     ...DEFAULT_SECTION,
     title_fr: 'Promotions',
     title_ar: 'عروض خاصة',
+    subtitle_fr: 'Découvrez nos offres exclusives du moment',
+    subtitle_ar: 'اكتشف أحدث العروض الحصرية',
+    cta_fr: 'Voir Offres',
+    cta_ar: 'شاهد العروض',
+    cta_link: '/shop?promo=true',
     source_mode: 'banners',
     source_ref: 'promotion_strip',
     style_variant: 'banner',
+    promo_images: DEFAULT_PROMO_IMAGES,
   },
   trust: {
     ...DEFAULT_SECTION,
@@ -403,6 +444,23 @@ function normalizeTrustItems(raw: any, fallback: TrustItem[]): TrustItem[] {
   return raw.slice(0, 12).map((entry: any, idx: number) => normalizeTrustItem(entry, fallback[idx] || fb));
 }
 
+function normalizePromoImage(raw: any, fallback: PromoImage): PromoImage {
+  const merged = { ...fallback, ...(raw || {}) };
+  return {
+    id: normalizeSafeText(merged.id, fallback.id) || `promo-img-${Math.random().toString(36).slice(2, 8)}`,
+    image_url: normalizeSafeText(merged.image_url, fallback.image_url),
+    title_fr: normalizeSafeText(merged.title_fr, fallback.title_fr),
+    title_ar: normalizeSafeText(merged.title_ar, fallback.title_ar),
+    link: normalizeUrlOrPath(merged.link, fallback.link),
+  };
+}
+
+function normalizePromoImages(raw: any, fallback: PromoImage[]): PromoImage[] {
+  if (!Array.isArray(raw)) return fallback.map((item) => ({ ...item }));
+  const fb = fallback[0] || DEFAULT_PROMO_IMAGES[0];
+  return raw.slice(0, 12).map((entry: any, idx: number) => normalizePromoImage(entry, fallback[idx] || fb));
+}
+
 function normalizeTestimonialItems(raw: any, fallback: TestimonialItem[]): TestimonialItem[] {
   if (!Array.isArray(raw)) return fallback.map((item) => ({ ...item }));
   const fb = fallback[0] || DEFAULT_TESTIMONIAL_ITEMS[0];
@@ -433,6 +491,9 @@ function normalizeSection(value: any, fallback: HomepageSection): HomepageSectio
   }
   if (Array.isArray(fallback.testimonial_items) || Array.isArray(merged.testimonial_items)) {
     base.testimonial_items = normalizeTestimonialItems(merged.testimonial_items, fallback.testimonial_items || DEFAULT_TESTIMONIAL_ITEMS);
+  }
+  if (Array.isArray(fallback.promo_images) || Array.isArray(merged.promo_images)) {
+    base.promo_images = normalizePromoImages(merged.promo_images, fallback.promo_images || DEFAULT_PROMO_IMAGES);
   }
   return base;
 }
@@ -486,6 +547,8 @@ export function AdminHomepage() {
   const [expandedKey, setExpandedKey] = useState<SectionKey | null>('hero');
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('desktop');
   const [pickerSection, setPickerSection] = useState<SectionKey | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [products, setProducts] = useState<ProductLookup[]>([]);
   const [categories, setCategories] = useState<CategoryLookup[]>([]);
@@ -576,6 +639,18 @@ export function AdminHomepage() {
       const target = direction === 'up' ? index - 1 : index + 1;
       if (target < 0 || target >= current.length) return prev;
       [current[index], current[target]] = [current[target], current[index]];
+      return { ...prev, sections_order: current };
+    });
+  };
+
+  const moveSectionTo = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    setDraftConfig((prev) => {
+      const current = [...prev.sections_order];
+      if (fromIndex < 0 || fromIndex >= current.length) return prev;
+      const clampedTo = Math.max(0, Math.min(current.length - 1, toIndex));
+      const [moved] = current.splice(fromIndex, 1);
+      current.splice(clampedTo, 0, moved);
       return { ...prev, sections_order: current };
     });
   };
@@ -708,6 +783,9 @@ export function AdminHomepage() {
   }
 
   const hasDraftAhead = !!(lastDraftAt && (!lastPublishedAt || lastDraftAt > lastPublishedAt));
+  const liveReport = validateHomepageConfig(draftConfig);
+  const liveErrors = liveReport.errors;
+  const liveWarnings = liveReport.warnings;
 
   return (
     <div className="space-y-6">
@@ -718,6 +796,42 @@ export function AdminHomepage() {
           <button type="button" onClick={publish} disabled={publishing} className="ml-auto shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-black text-white hover:bg-amber-700 disabled:opacity-60">
             Publier maintenant
           </button>
+        </div>
+      )}
+      {(liveErrors.length > 0 || liveWarnings.length > 0) && (
+        <div className="space-y-2">
+          {liveErrors.length > 0 && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              <div className="mb-2 flex items-center gap-2 font-black">
+                <AlertTriangle size={16} />
+                <span>Erreurs ({liveErrors.length}) — la publication est bloquée</span>
+              </div>
+              <ul className="list-inside list-disc space-y-1 text-xs">
+                {liveErrors.slice(0, 6).map((err, idx) => (
+                  <li key={`err-${idx}`}>{err.messageFr}</li>
+                ))}
+                {liveErrors.length > 6 && (
+                  <li className="opacity-70">… +{liveErrors.length - 6} autre(s)</li>
+                )}
+              </ul>
+            </div>
+          )}
+          {liveWarnings.length > 0 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <div className="mb-2 flex items-center gap-2 font-black">
+                <AlertTriangle size={16} />
+                <span>Avertissements ({liveWarnings.length}) — la publication reste possible</span>
+              </div>
+              <ul className="list-inside list-disc space-y-1 text-xs">
+                {liveWarnings.slice(0, 6).map((warn, idx) => (
+                  <li key={`warn-${idx}`}>{warn.messageFr}</li>
+                ))}
+                {liveWarnings.length > 6 && (
+                  <li className="opacity-70">… +{liveWarnings.length - 6} autre(s)</li>
+                )}
+              </ul>
+            </div>
+          )}
         </div>
       )}
       {/* ─── Gestionnaire du Hero Carousel (Carrousel publicitaire principal) ─── */}
@@ -803,12 +917,59 @@ export function AdminHomepage() {
             const section = draftConfig[sectionKey];
             const expanded = expandedKey === sectionKey;
 
+            const isDragging = dragIndex === index;
+            const isDropTarget = dragOverIndex === index && dragIndex !== null && dragIndex !== index;
+
             return (
-              <div key={sectionKey} className={`${t.card} ${t.cardBorder} overflow-hidden rounded-2xl border shadow-sm`}>
+              <div
+                key={sectionKey}
+                draggable
+                onDragStart={(event) => {
+                  setDragIndex(index);
+                  event.dataTransfer.effectAllowed = 'move';
+                  try {
+                    event.dataTransfer.setData('text/plain', sectionKey);
+                  } catch {
+                    /* ignore — some browsers restrict setData */
+                  }
+                }}
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  if (dragIndex !== null && dragIndex !== index) {
+                    setDragOverIndex(index);
+                  }
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                }}
+                onDragEnd={() => {
+                  setDragIndex(null);
+                  setDragOverIndex(null);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (dragIndex !== null && dragIndex !== index) {
+                    moveSectionTo(dragIndex, index);
+                  }
+                  setDragIndex(null);
+                  setDragOverIndex(null);
+                }}
+                className={`${t.card} ${t.cardBorder} overflow-hidden rounded-2xl border shadow-sm transition-all ${
+                  isDragging ? 'scale-[0.99] opacity-50' : ''
+                } ${isDropTarget ? 'border-t-4 border-t-blue-500 ring-2 ring-blue-200' : ''}`}
+              >
                 <div
                   className={`flex cursor-pointer items-center gap-3 px-4 py-3 ${t.rowHover}`}
                   onClick={() => setExpandedKey(expanded ? null : sectionKey)}
                 >
+                  <div
+                    className="flex h-8 w-5 cursor-grab items-center justify-center text-gray-400 hover:text-gray-600 active:cursor-grabbing"
+                    onClick={(event) => event.stopPropagation()}
+                    title="Glisser pour réordonner"
+                  >
+                    <GripVertical size={14} />
+                  </div>
                   <div className="flex flex-col gap-1">
                     <button
                       type="button"
@@ -1053,6 +1214,13 @@ export function AdminHomepage() {
                         onChange={(nextItems) => updateSection(sectionKey, { testimonial_items: nextItems })}
                       />
                     )}
+
+                    {sectionKey === 'promotions' && (
+                      <PromoImagesEditor
+                        items={section.promo_images || []}
+                        onChange={(nextItems) => updateSection(sectionKey, { promo_images: nextItems })}
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -1119,6 +1287,11 @@ export function AdminHomepage() {
                     {key === 'testimonials' && section.testimonial_items && section.testimonial_items.length > 0 && (
                       <p className="mt-2 text-[11px] font-semibold text-violet-700">
                         {section.testimonial_items.length} témoignages
+                      </p>
+                    )}
+                    {key === 'promotions' && section.promo_images && section.promo_images.length > 0 && (
+                      <p className="mt-2 text-[11px] font-semibold text-amber-700">
+                        {section.promo_images.length} image(s) promo
                       </p>
                     )}
                     {(section.cta_fr || section.cta_ar) && (
@@ -1377,23 +1550,23 @@ function TestimonialItemsEditor({
         id: `testi-${Date.now().toString(36)}`,
         author_fr: '',
         author_ar: '',
-        wilaya_fr: 'Alger',
-        wilaya_ar: 'الجزائر',
         quote_fr: '',
         quote_ar: '',
-        avatar: '',
+        wilaya_fr: 'Alger',
+        wilaya_ar: 'الجزائر العاصمة',
         rating: 5,
+        avatar_url: '',
       },
     ]);
   };
   return (
-    <div className="space-y-3 rounded-2xl border border-violet-200 bg-violet-50/40 p-3">
+    <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/40 p-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-black uppercase tracking-wide text-violet-700">Temoignages ({items.length})</p>
+        <p className="text-xs font-black uppercase tracking-wide text-amber-700">Temoignages ({items.length})</p>
         <button
           type="button"
           onClick={addItem}
-          className="inline-flex items-center gap-1 rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700"
+          className="inline-flex items-center gap-1 rounded-xl bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600"
         >
           <Plus size={12} />
           Ajouter
@@ -1403,7 +1576,7 @@ function TestimonialItemsEditor({
         <p className="text-xs text-gray-500">Aucun temoignage. Cliquez sur Ajouter pour en creer un.</p>
       )}
       {items.map((item, index) => (
-        <div key={item.id || index} className="space-y-2 rounded-xl border border-violet-100 bg-white p-3">
+        <div key={item.id || index} className="space-y-2 rounded-xl border border-amber-100 bg-white p-3">
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-black uppercase tracking-wide text-gray-500">#{index + 1}</p>
             <button
@@ -1417,36 +1590,33 @@ function TestimonialItemsEditor({
           </div>
           <div className="grid gap-2 md:grid-cols-2">
             <LabeledInput
-              label="Auteur FR"
+              label="Nom (FR)"
               value={item.author_fr}
               onChange={(value) => updateItem(index, { author_fr: normalizeSafeText(value, '') })}
-              placeholder="Amina B."
+              placeholder="Amine Benali"
             />
             <LabeledInput
-              label="الاسم AR"
+              label="الاسم (AR)"
               value={item.author_ar}
               onChange={(value) => updateItem(index, { author_ar: normalizeSafeText(value, '') })}
               dir="rtl"
-              placeholder="أمينة ب."
+              placeholder="أمين بن علي"
             />
           </div>
           <div className="grid gap-2 md:grid-cols-2">
             <label className="space-y-1 text-xs font-semibold text-gray-600">
               <span>Wilaya FR</span>
               <select
-                value={item.wilaya_fr}
+                value={item.wilaya_fr || WILAYA_PRESETS_FR[0]}
                 onChange={(event) => {
-                  const next = event.target.value;
-                  const idx = WILAYA_PRESETS_FR.indexOf(next);
-                  updateItem(index, {
-                    wilaya_fr: next,
-                    wilaya_ar: idx >= 0 ? WILAYA_PRESETS_AR[idx] : item.wilaya_ar,
-                  });
+                  const idx = WILAYA_PRESETS_FR.indexOf(event.target.value);
+                  const ar = idx >= 0 ? WILAYA_PRESETS_AR[idx] : item.wilaya_ar;
+                  updateItem(index, { wilaya_fr: event.target.value, wilaya_ar: ar });
                 }}
                 className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
               >
-                {WILAYA_PRESETS_FR.map((w) => (
-                  <option key={w} value={w}>{w}</option>
+                {WILAYA_PRESETS_FR.map((value) => (
+                  <option key={value} value={value}>{value}</option>
                 ))}
               </select>
             </label>
@@ -1455,45 +1625,172 @@ function TestimonialItemsEditor({
               value={item.wilaya_ar}
               onChange={(value) => updateItem(index, { wilaya_ar: normalizeSafeText(value, '') })}
               dir="rtl"
-            />
-          </div>
-          <div className="grid gap-2 md:grid-cols-2">
-            <LabeledTextarea
-              label="Citation FR"
-              value={item.quote_fr}
-              onChange={(value) => updateItem(index, { quote_fr: normalizeSafeText(value, '') })}
-            />
-            <LabeledTextarea
-              label="الاقتباس AR"
-              value={item.quote_ar}
-              onChange={(value) => updateItem(index, { quote_ar: normalizeSafeText(value, '') })}
-              dir="rtl"
+              placeholder="الجزائر العاصمة"
             />
           </div>
           <div className="grid gap-2 md:grid-cols-2">
             <LabeledInput
-              label="URL avatar (optionnel)"
-              value={item.avatar}
-              onChange={(value) => updateItem(index, { avatar: normalizeSafeText(value, '') })}
+              label="Citation FR"
+              value={item.quote_fr}
+              onChange={(value) => updateItem(index, { quote_fr: normalizeSafeText(value, '') })}
+              placeholder="Service rapide et qualite remarquable."
+            />
+            <LabeledInput
+              label="الاقتباس AR"
+              value={item.quote_ar}
+              onChange={(value) => updateItem(index, { quote_ar: normalizeSafeText(value, '') })}
+              dir="rtl"
+              placeholder="خدمة سريعة وجودة استثنائية."
+            />
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <LabeledInput
+              label="Avatar URL"
+              value={item.avatar_url || ''}
+              onChange={(value) => updateItem(index, { avatar_url: normalizeUrlOrPath(value, '') })}
               placeholder="https://..."
             />
             <label className="space-y-1 text-xs font-semibold text-gray-600">
               <span>Note (1-5)</span>
               <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3 py-2">
-                {[1, 2, 3, 4, 5].map((n) => (
+                {[1, 2, 3, 4, 5].map((value) => (
                   <button
-                    key={n}
                     type="button"
-                    onClick={() => updateItem(index, { rating: n })}
-                    className={n <= item.rating ? 'text-amber-500' : 'text-gray-300'}
+                    key={value}
+                    onClick={() => updateItem(index, { rating: value })}
+                    className="rounded p-0.5 text-amber-500 hover:bg-amber-50"
+                    title={`${value} etoile${value > 1 ? 's' : ''}`}
                   >
-                    <StarIcon size={16} fill={n <= item.rating ? 'currentColor' : 'none'} />
+                    <StarIcon size={14} fill={value <= (item.rating || 5) ? 'currentColor' : 'none'} />
                   </button>
                 ))}
-                <span className="ml-auto text-xs font-bold text-gray-700">{item.rating}/5</span>
               </div>
             </label>
           </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PromoImagesEditor({
+  items,
+  onChange,
+}: {
+  items: PromoImage[];
+  onChange: (items: PromoImage[]) => void;
+}) {
+  const updateItem = (index: number, patch: Partial<PromoImage>) => {
+    const next = items.map((item, i) => (i === index ? { ...item, ...patch } : item));
+    onChange(next);
+  };
+  const removeItem = (index: number) => {
+    onChange(items.filter((_, i) => i !== index));
+  };
+  const addItem = () => {
+    if (items.length >= 12) {
+      toast.error('Maximum 12 images promo.');
+      return;
+    }
+    onChange([
+      ...items,
+      {
+        id: `promo-img-${Date.now().toString(36)}`,
+        image_url: '',
+        title_fr: '',
+        title_ar: '',
+        link: '/shop?promo=true',
+      },
+    ]);
+  };
+  const moveItem = (from: number, to: number) => {
+    if (to < 0 || to >= items.length) return;
+    const next = [...items];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onChange(next);
+  };
+  return (
+    <div className="space-y-3 rounded-2xl border border-orange-200 bg-orange-50/40 p-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-black uppercase tracking-wide text-orange-700">Images carousel promo ({items.length})</p>
+        <button
+          type="button"
+          onClick={addItem}
+          className="inline-flex items-center gap-1 rounded-xl bg-orange-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-orange-600"
+        >
+          <Plus size={12} />
+          Ajouter
+        </button>
+      </div>
+      {items.length === 0 && (
+        <p className="text-xs text-gray-500">Aucune image. Cliquez sur Ajouter pour en creer une.</p>
+      )}
+      {items.map((item, index) => (
+        <div key={item.id || index} className="space-y-2 rounded-xl border border-orange-100 bg-white p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-black uppercase tracking-wide text-gray-500">#{index + 1}</p>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => moveItem(index, index - 1)}
+                disabled={index === 0}
+                className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+                title="Monter"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                onClick={() => moveItem(index, index + 1)}
+                disabled={index === items.length - 1}
+                className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+                title="Descendre"
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                onClick={() => removeItem(index)}
+                className="rounded-lg p-1 text-red-500 hover:bg-red-50"
+                title="Supprimer"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+          {item.image_url && (
+            <div className="overflow-hidden rounded-xl border border-orange-100">
+              <img src={item.image_url} alt={item.title_fr || 'promo'} className="h-28 w-full object-cover" />
+            </div>
+          )}
+          <LabeledInput
+            label="URL image"
+            value={item.image_url}
+            onChange={(value) => updateItem(index, { image_url: normalizeSafeText(value, '') })}
+            placeholder="https://..."
+          />
+          <div className="grid gap-2 md:grid-cols-2">
+            <LabeledInput
+              label="Titre FR"
+              value={item.title_fr}
+              onChange={(value) => updateItem(index, { title_fr: normalizeSafeText(value, '') })}
+              placeholder="Pack rentrée scolaire"
+            />
+            <LabeledInput
+              label="العنوان AR"
+              value={item.title_ar}
+              onChange={(value) => updateItem(index, { title_ar: normalizeSafeText(value, '') })}
+              dir="rtl"
+              placeholder="حزمة الدخول المدرسي"
+            />
+          </div>
+          <LabeledInput
+            label="Lien (optionnel)"
+            value={item.link}
+            onChange={(value) => updateItem(index, { link: normalizeUrlOrPath(value, '') })}
+            placeholder="/shop?promo=true"
+          />
         </div>
       ))}
     </div>

@@ -31,6 +31,7 @@ export type HeroTextPanel = {
   blur_px: number;         // 0..24
   text_color: string;
   align: HeroAlign;
+  show_text_overlay: boolean; // default true; when false, the text card is hidden
 };
 
 export type HeroSlide = {
@@ -66,6 +67,7 @@ export const DEFAULT_HERO_TEXT_PANEL: HeroTextPanel = {
   blur_px: 0,
   text_color: '#10223c',
   align: 'start',
+  show_text_overlay: true,
 };
 
 function normalizePanel(raw: unknown): HeroTextPanel {
@@ -85,6 +87,7 @@ function normalizePanel(raw: unknown): HeroTextPanel {
     blur_px: Math.max(0, Math.min(30, num(r.blur_px, 0))),
     text_color: str(r.text_color, DEFAULT_HERO_TEXT_PANEL.text_color),
     align: (['start', 'center', 'end'].includes(str(r.align, '')) ? r.align : 'start') as HeroAlign,
+    show_text_overlay: typeof r.show_text_overlay === 'boolean' ? r.show_text_overlay : true,
   };
 }
 

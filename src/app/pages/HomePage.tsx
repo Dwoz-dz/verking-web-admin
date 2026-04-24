@@ -9,7 +9,7 @@ import { InlineAnnouncementStrip } from '../components/home/InlineAnnouncementSt
 import { HeroCarousel } from '../components/home/HeroCarousel';
 import { normalizeCategoriesStrip } from '../lib/categoriesStrip';
 import { CATEGORIES_UPDATED_EVENT, CATEGORIES_UPDATED_KEY, CONTENT_UPDATED_KEY } from '../lib/realtime';
-import { ProductCard } from '../components/ProductCard';
+import { ProductCard, DiscoverMoreCard } from '../components/ProductCard';
 
 type SourceMode = 'manual' | 'products' | 'categories' | 'banners';
 
@@ -35,6 +35,14 @@ type TestimonialItemConfig = {
   rating?: number;
 };
 
+type PromoImageConfig = {
+  id?: string;
+  image_url?: string;
+  title_fr?: string;
+  title_ar?: string;
+  link?: string;
+};
+
 type HomepageSectionConfig = {
   enabled?: boolean;
   title_fr?: string;
@@ -51,6 +59,7 @@ type HomepageSectionConfig = {
   limit?: number;
   trust_items?: TrustItemConfig[];
   testimonial_items?: TestimonialItemConfig[];
+  promo_images?: PromoImageConfig[];
 };
 
 const TRUST_ICON_MAP: Record<string, React.ComponentType<{ size?: number }>> = {
@@ -532,6 +541,40 @@ export function HomePage() {
     ? resolveBannerHref({ ...promoLeadBanner, link: asText(promoSection.cta_link) || asText(promoLeadBanner.link) })
     : (asText(promoSection.cta_link) || '/shop?promo=true');
 
+  // Build promo carousel images: 1) admin-configured promo_images, 2) promo banners, 3) fallback to promoVisual
+  const promoCarouselImages: PromoImageConfig[] = useMemo(() => {
+    const configured = Array.isArray((promoSection as any).promo_images)
+      ? (((promoSection as any).promo_images as PromoImageConfig[]) || []).filter((entry) => asText(entry?.image_url))
+      : [];
+    if (configured.length > 0) return configured;
+
+    const bannerImages: PromoImageConfig[] = promoBanners
+      .map((banner, idx) => {
+        const url = asText(banner.desktop_image) || asText(banner.image);
+        if (!url) return null;
+        return {
+          id: `promo-banner-${banner.id || idx}`,
+          image_url: url,
+          title_fr: asText(banner.title_fr),
+          title_ar: asText(banner.title_ar),
+          link: resolveBannerHref(banner),
+        } as PromoImageConfig;
+      })
+      .filter(Boolean) as PromoImageConfig[];
+    if (bannerImages.length > 0) return bannerImages;
+
+    if (asText(promoSection.image)) {
+      return [{
+        id: 'promo-fallback',
+        image_url: asText(promoSection.image),
+        title_fr: promoTitle,
+        title_ar: promoTitle,
+        link: promoLink,
+      }];
+    }
+    return [];
+  }, [promoSection, promoBanners, promoTitle, promoLink]);
+
   const showFeaturedSection = featuredSection.enabled !== false && theme.show_featured !== false;
   const showNewSection = newSection.enabled !== false && theme.show_new_arrivals !== false;
   const showBestSection = bestSection.enabled !== false && theme.show_best_sellers !== false;
@@ -541,12 +584,52 @@ export function HomePage() {
   if (loading) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center"
+        dir={dir}
+        className="min-h-screen w-full overflow-x-hidden"
         style={{ background: 'linear-gradient(160deg,#bbd8f0 0%,#cce6ff 20%,#dbeeff 45%,#f0f8ff 80%,#f8fbff 100%)' }}
       >
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-14 h-14 border-4 border-sky-200 rounded-full animate-spin shadow-lg" style={{ borderTopColor: ETHEREAL_PRIMARY }} />
-          <p className="text-sky-700 font-semibold text-sm tracking-wide">
+        <div className="mx-auto w-full max-w-7xl px-4 py-8 space-y-8">
+          {/* Hero skeleton */}
+          <div className="relative overflow-hidden rounded-3xl bg-white/50 backdrop-blur-sm shadow-xl aspect-[16/7] w-full">
+            <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-sky-100/50 via-blue-100/60 to-sky-100/50" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-14 h-14 border-4 border-sky-200 rounded-full animate-spin shadow-lg" style={{ borderTopColor: ETHEREAL_PRIMARY }} />
+            </div>
+          </div>
+
+          {/* Trust bar skeleton */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={`trust-sk-${i}`} className="h-24 rounded-2xl bg-white/60 backdrop-blur-sm animate-pulse" />
+            ))}
+          </div>
+
+          {/* Categories skeleton */}
+          <div className="space-y-3">
+            <div className="h-7 w-56 rounded-lg bg-white/60 animate-pulse" />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={`cat-sk-${i}`} className="aspect-square rounded-2xl bg-white/60 backdrop-blur-sm animate-pulse" />
+              ))}
+            </div>
+          </div>
+
+          {/* Product grid skeleton */}
+          <div className="space-y-3">
+            <div className="h-7 w-64 rounded-lg bg-white/60 animate-pulse" />
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={`prod-sk-${i}`} className="space-y-3 rounded-2xl bg-white/60 backdrop-blur-sm p-3 animate-pulse">
+                  <div className="aspect-square rounded-xl bg-sky-100/60" />
+                  <div className="h-4 w-3/4 rounded bg-sky-100/60" />
+                  <div className="h-3 w-1/2 rounded bg-sky-100/60" />
+                  <div className="h-6 w-1/3 rounded bg-sky-100/60" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-center text-sky-700 font-semibold text-sm tracking-wide">
             {lang === 'ar' ? 'جاري التحميل…' : 'Chargement…'}
           </p>
         </div>
@@ -635,12 +718,16 @@ export function HomePage() {
                   src={heroImage}
                   onError={(e) => { e.currentTarget.src = LOCAL_HERO_PRIMARY; }}
                   alt={heroTitle}
+                  fetchPriority="high"
+                  decoding="async"
                   className="absolute inset-0 h-full w-full object-cover object-center"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1a518720] via-[#78b7e61f] to-white/15" />
                 <img
                   src={LOCAL_HERO_ALT}
                   alt="hero alternate"
+                  loading="lazy"
+                  decoding="async"
                   className="absolute bottom-4 end-4 h-24 w-24 md:h-28 md:w-28 rounded-2xl object-cover shadow-[0_18px_28px_-18px_rgba(12,40,84,0.55)]"
                 />
               </div>
@@ -704,6 +791,9 @@ export function HomePage() {
                     {featuredProducts.slice(0, 8).map((product) => (
                       <ProductCard key={product.id} product={product} />
                     ))}
+                    {featuredProducts.length === 1 && (
+                      <DiscoverMoreCard href={asText(featuredSection.cta_link) || '/shop?featured=true'} />
+                    )}
                   </div>
                   <div className="sm:hidden mt-4 flex justify-center">
                     <Link
@@ -755,6 +845,8 @@ export function HomePage() {
                         <img
                           src={category.image || LOCAL_HERO_ALT}
                           alt={pickLocalized(category.name_fr, category.name_ar, lang)}
+                          loading="lazy"
+                          decoding="async"
                           className="h-14 w-14 rounded-xl object-cover shadow-sm"
                         />
                         <div className="min-w-0 flex-1">
@@ -772,41 +864,54 @@ export function HomePage() {
               )}
             </div>
           ) : null}
-          {/* Bento Row 2: Promo Block */}
-          {promoSection.enabled !== false && (promoBanners.length > 0 || promoProducts.length > 0 || asText(promoSection.image)) && (
+          {/* Bento Row 2: Promo Block — unified text + integrated carousel */}
+          {promoSection.enabled !== false && (promoCarouselImages.length > 0 || promoProducts.length > 0 || asText(promoSection.image)) && (
             <div className="rounded-[1.75rem] overflow-hidden p-4 md:p-5" style={GLASS_PANEL_STYLE}>
-              <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr] items-center">
-                <div className="rounded-[1.5rem] p-6 md:p-8" style={GLASS_CARD_STYLE}>
+              {/* Unified integrated frame: text zone + carousel in one seamless card */}
+              <div
+                className="rounded-[1.5rem] overflow-hidden grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] gap-0"
+                style={GLASS_CARD_STYLE}
+              >
+                {/* LEFT ZONE — bilingual text + CTA (mobile: appears below carousel) */}
+                <div className="order-2 lg:order-1 p-6 md:p-8 lg:p-10 flex flex-col justify-center">
                   <div
-                    className="inline-flex items-center gap-2 mb-4 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-[0.14em] text-white"
+                    className="inline-flex items-center gap-2 mb-4 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-[0.14em] text-white self-start"
                     style={{ background: `linear-gradient(135deg,${ETHEREAL_PRIMARY},${ETHEREAL_PRIMARY_LIGHT})` }}
                   >
-                    {'Promo'}
+                    {lang === 'ar' ? 'عروض' : 'Promo'}
                   </div>
-                  <h2 className="font-black text-3xl md:text-5xl text-[#11233d] tracking-tight leading-[1.05] mb-2" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                  <h2
+                    className="font-black text-2xl md:text-4xl lg:text-5xl text-[#11233d] tracking-tight leading-[1.05] mb-2"
+                    style={{ fontFamily: 'Montserrat, sans-serif' }}
+                  >
                     {promoTitle}
                   </h2>
-                  <p className="text-[#3f5f83] text-sm md:text-lg font-medium mb-6">
+                  <p className="text-[#3f5f83] text-sm md:text-base lg:text-lg font-medium mb-6">
                     {promoSubtitle}
                   </p>
                   <Link
                     to={promoLink}
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-sm font-black text-white transition-all duration-200 hover:scale-[1.03] active:scale-[0.98]"
-                    style={{ background: `linear-gradient(135deg,${ETHEREAL_PRIMARY},${ETHEREAL_PRIMARY_LIGHT})`, boxShadow: '0 10px 26px rgba(155,63,0,0.34)' }}
+                    className="self-start inline-flex items-center gap-2 px-6 py-3 rounded-full text-sm font-black text-white transition-all duration-200 hover:scale-[1.03] active:scale-[0.98]"
+                    style={{
+                      background: `linear-gradient(135deg,${ETHEREAL_PRIMARY},${ETHEREAL_PRIMARY_LIGHT})`,
+                      boxShadow: '0 10px 26px rgba(155,63,0,0.34)',
+                    }}
                   >
-                    {pickLocalized(promoSection.cta_fr, promoSection.cta_ar, lang, 'Voir Offres')}
+                    {pickLocalized(promoSection.cta_fr, promoSection.cta_ar, lang, lang === 'ar' ? 'شاهد العروض' : 'Voir Offres')}
                     <ChevronRight size={14} className="rtl:rotate-180" />
                   </Link>
                 </div>
 
-                <Link to={promoLink} className="block rounded-[1.5rem] overflow-hidden min-h-[220px] md:min-h-[280px]" style={GLASS_CARD_STYLE}>
-                  <img
-                    src={promoVisual}
-                    onError={(e) => { e.currentTarget.src = LOCAL_SCREEN_BG; }}
-                    alt={promoTitle}
-                    className="h-full w-full object-cover"
+                {/* RIGHT ZONE — integrated carousel (mobile: on top) */}
+                <div className="order-1 lg:order-2 relative min-h-[220px] md:min-h-[300px] lg:min-h-[360px]">
+                  <PromoCarousel
+                    images={promoCarouselImages}
+                    lang={lang}
+                    fallbackTitle={promoTitle}
+                    fallbackLink={promoLink}
+                    onFallbackImage={promoVisual !== LOCAL_SCREEN_BG ? promoVisual : LOCAL_SCREEN_BG}
                   />
-                </Link>
+                </div>
               </div>
 
               {promoProducts.length > 0 && (
@@ -814,6 +919,9 @@ export function HomePage() {
                   {promoProducts.slice(0, 8).map((product) => (
                     <ProductCard key={product.id} product={product} />
                   ))}
+                  {promoProducts.length === 1 && (
+                    <DiscoverMoreCard href={promoLink || '/shop?promo=true'} />
+                  )}
                 </div>
               )}
             </div>
@@ -850,6 +958,9 @@ export function HomePage() {
                     {newProducts.slice(0, 8).map((product) => (
                       <ProductCard key={product.id} product={product} />
                     ))}
+                    {newProducts.length === 1 && (
+                      <DiscoverMoreCard href={asText(newSection.cta_link) || '/shop?new=true'} />
+                    )}
                   </div>
                 </div>
               )}
@@ -881,6 +992,9 @@ export function HomePage() {
                     {bestSellerProducts.slice(0, 8).map((product) => (
                       <ProductCard key={product.id} product={product} />
                     ))}
+                    {bestSellerProducts.length === 1 && (
+                      <DiscoverMoreCard href={asText(bestSection.cta_link) || '/shop?best_seller=true'} />
+                    )}
                   </div>
                 </div>
               )}
@@ -999,7 +1113,7 @@ export function HomePage() {
 
                     <div className="flex items-center gap-4 mb-4">
                       {active.avatar ? (
-                        <img src={active.avatar} alt={authorName} className="w-14 h-14 md:w-16 md:h-16 rounded-full object-cover border-2 border-white shadow-md" />
+                        <img src={active.avatar} alt={authorName} loading="lazy" decoding="async" className="w-14 h-14 md:w-16 md:h-16 rounded-full object-cover border-2 border-white shadow-md" />
                       ) : (
                         <div
                           className="w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center font-black text-white text-lg md:text-xl border-2 border-white shadow-md"
@@ -1167,6 +1281,185 @@ export function HomePage() {
 
         </section>
       </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * PromoCarousel — lightweight auto-advance carousel for the promo
+ * section. No external deps: CSS-only fade/Ken-Burns + React state.
+ * Features: auto-advance 5s, dots nav, hover-pause, swipe (touch),
+ * lazy-load images, fallback gradient when empty.
+ * ───────────────────────────────────────────────────────────── */
+type PromoCarouselProps = {
+  images: PromoImageConfig[];
+  lang: 'fr' | 'ar';
+  fallbackTitle: string;
+  fallbackLink: string;
+  onFallbackImage?: string;
+};
+
+function PromoCarousel({ images, lang, fallbackTitle, fallbackLink, onFallbackImage }: PromoCarouselProps) {
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const touchStartX = React.useRef<number | null>(null);
+
+  const count = images.length;
+
+  useEffect(() => {
+    if (count <= 1 || paused) return undefined;
+    const t = window.setInterval(() => {
+      setIndex((prev) => (prev + 1) % count);
+    }, 5000);
+    return () => window.clearInterval(t);
+  }, [count, paused]);
+
+  // Clamp index if images shrink
+  useEffect(() => {
+    if (index >= count && count > 0) setIndex(0);
+  }, [count, index]);
+
+  const onTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current == null || count <= 1) return;
+    const delta = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(delta) > 40) {
+      setIndex((prev) => {
+        const dir = delta < 0 ? 1 : -1;
+        return (prev + dir + count) % count;
+      });
+    }
+    touchStartX.current = null;
+  };
+
+  // Empty fallback: gradient + animated pulse
+  if (count === 0) {
+    return (
+      <Link
+        to={fallbackLink}
+        className="relative block w-full h-full min-h-[240px] md:min-h-[320px] rounded-[1.5rem] overflow-hidden group"
+        style={{
+          background: 'linear-gradient(135deg,#ff8c4a 0%,#e06d2c 45%,#9b3f00 100%)',
+        }}
+      >
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div
+            className="absolute inset-0 opacity-40"
+            style={{
+              background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.35), transparent 55%), radial-gradient(circle at 70% 70%, rgba(255,255,255,0.25), transparent 60%)',
+              animation: 'promoPulse 4s ease-in-out infinite',
+            }}
+          />
+          <div className="relative z-10 text-center text-white px-6">
+            <div
+              className="inline-flex h-16 w-16 md:h-20 md:w-20 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm mb-3"
+              style={{ animation: 'promoFloat 3.5s ease-in-out infinite' }}
+            >
+              <Star size={32} className="text-white drop-shadow" />
+            </div>
+            <p className="font-black text-xl md:text-2xl tracking-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+              {fallbackTitle}
+            </p>
+          </div>
+        </div>
+        {onFallbackImage && (
+          <img
+            src={onFallbackImage}
+            alt=""
+            aria-hidden
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover mix-blend-overlay opacity-30"
+          />
+        )}
+        <style>{`
+          @keyframes promoPulse { 0%,100% { opacity: 0.25; } 50% { opacity: 0.55; } }
+          @keyframes promoFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+        `}</style>
+      </Link>
+    );
+  }
+
+  const current = images[Math.min(index, count - 1)];
+  const currentTitle = (lang === 'ar' ? current.title_ar : current.title_fr) || (lang === 'ar' ? current.title_fr : current.title_ar) || fallbackTitle;
+  const currentLink = current.link || fallbackLink;
+
+  return (
+    <div
+      className="relative w-full h-full min-h-[240px] md:min-h-[320px] rounded-[1.5rem] overflow-hidden group"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      aria-roledescription="carousel"
+    >
+      {/* Slides layered absolutely — crossfade via opacity + ken-burns scale */}
+      {images.map((img, i) => {
+        const active = i === index;
+        const titleForImg = (lang === 'ar' ? img.title_ar : img.title_fr) || (lang === 'ar' ? img.title_fr : img.title_ar) || fallbackTitle;
+        return (
+          <Link
+            key={img.id || i}
+            to={img.link || fallbackLink}
+            className="absolute inset-0"
+            style={{
+              opacity: active ? 1 : 0,
+              transition: 'opacity 1.2s ease',
+              pointerEvents: active ? 'auto' : 'none',
+            }}
+            aria-hidden={!active}
+            tabIndex={active ? 0 : -1}
+          >
+            <img
+              src={img.image_url}
+              onError={(e) => { if (onFallbackImage) e.currentTarget.src = onFallbackImage; }}
+              alt={titleForImg}
+              loading={i === 0 ? 'eager' : 'lazy'}
+              decoding="async"
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{
+                transform: active ? 'scale(1.06)' : 'scale(1.0)',
+                transition: 'transform 8s ease-out',
+              }}
+            />
+            {/* soft bottom overlay for legibility */}
+            <div
+              className="absolute inset-x-0 bottom-0 h-2/5"
+              style={{ background: 'linear-gradient(to top, rgba(17,35,61,0.55), transparent)' }}
+            />
+            {titleForImg && (
+              <div className="absolute left-4 right-4 bottom-4 md:left-6 md:right-6 md:bottom-6 text-white">
+                <p className="font-black text-base md:text-xl tracking-tight drop-shadow-lg" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                  {titleForImg}
+                </p>
+              </div>
+            )}
+          </Link>
+        );
+      })}
+
+      {/* Pagination dots */}
+      {count > 1 && (
+        <div className="absolute z-20 left-1/2 -translate-x-1/2 bottom-3 flex items-center gap-1.5">
+          {images.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={`${lang === 'ar' ? 'الشريحة' : 'Slide'} ${i + 1}`}
+              onClick={() => setIndex(i)}
+              className="h-2 rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/50"
+              style={{
+                width: i === index ? 22 : 8,
+                background: i === index ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.5)',
+                boxShadow: i === index ? '0 1px 3px rgba(0,0,0,0.3)' : 'none',
+              }}
+            />
+          ))}
+        </div>
+      )}
+      {/* Hidden title/link for a11y (announces current slide) */}
+      <span className="sr-only">{currentTitle}</span>
+      <a href={currentLink} className="sr-only">{currentTitle}</a>
     </div>
   );
 }

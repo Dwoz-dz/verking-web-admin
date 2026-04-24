@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { ShoppingCart, Heart, Star, Sparkles } from 'lucide-react';
+import { ShoppingCart, Heart, Star, Package, Truck, ChevronRight } from 'lucide-react';
 import { useLang } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { formatPrice } from '../lib/translations';
@@ -18,8 +18,8 @@ interface Product {
 const WISHLIST_KEY = 'vk_wishlist_v1';
 const WISHLIST_EVENT = 'vk:wishlist-updated';
 const LOCAL_PRODUCT_FALLBACK = '/verking-hero.png';
-const ETHEREAL_PRIMARY = '#9b3f00';
-const ETHEREAL_PRIMARY_LIGHT = '#ff7a2e';
+const CORAL_PRIMARY = '#9b3f00';
+const CORAL_LIGHT = '#ff7a2e';
 
 function readWishlist(): string[] {
   if (typeof window === 'undefined') return [];
@@ -37,6 +37,24 @@ function writeWishlist(ids: string[]) {
   } catch { /* ignore */ }
 }
 
+/**
+ * ProductCard — premium compact card (2026 refresh)
+ *
+ * Structure:
+ *   ┌─────────────────────┐
+ *   │  [Badge] [♥]        │
+ *   │   [IMAGE 1:1]       │  ← dominant ~58% of card height
+ *   │ ─────────────────── │
+ *   │ Name (2 lines)      │
+ *   │ ★★★★★ (24)         │
+ *   │ 2500 DA  3000 DA    │
+ *   │ ✓ Livraison  [🛒]   │
+ *   └─────────────────────┘
+ *
+ * Dimensions: 20px card radius · 16px image radius · 12px padding.
+ * States: default / hover (scale 1.02 + shadow) / out-of-stock (60% opacity).
+ * Bilingual FR/AR + RTL via logical props (start/end).
+ */
 export function ProductCard({ product }: { product: Product }) {
   const { lang } = useLang();
   const { addItem } = useCart();
@@ -59,11 +77,13 @@ export function ProductCard({ product }: { product: Product }) {
     e.preventDefault(); e.stopPropagation();
     const current = readWishlist();
     const exists = current.includes(product.id);
-    writeWishlist(exists ? current.filter(id => id !== product.id) : [...current, product.id]);
+    writeWishlist(exists ? current.filter((id) => id !== product.id) : [...current, product.id]);
     setWishlisted(!exists);
-    toast.success(exists
-      ? (lang === 'ar' ? 'تمت الإزالة من المفضلة' : 'Retiré des favoris')
-      : (lang === 'ar' ? 'تمت الإضافة للمفضلة' : 'Ajouté aux favoris'));
+    toast.success(
+      exists
+        ? (lang === 'ar' ? 'تمت الإزالة من المفضلة' : 'Retiré des favoris')
+        : (lang === 'ar' ? 'تمت الإضافة للمفضلة' : 'Ajouté aux favoris'),
+    );
   }, [product.id, lang]);
 
   const handleAdd = (e: React.MouseEvent) => {
@@ -92,229 +112,303 @@ export function ProductCard({ product }: { product: Product }) {
   const discountPct = isPromo
     ? Math.round(((product.price - (product.sale_price as number)) / product.price) * 100)
     : 0;
-  const rating = product.rating || 4.8;
+  const rating = typeof product.rating === 'number' && product.rating > 0 ? product.rating : 4.8;
   const reviews = product.review_count || 0;
   const salesCount = product.order_count || 0;
-  const fallback = LOCAL_PRODUCT_FALLBACK;
+  const reviewOrSales = reviews > 0 ? reviews : salesCount;
+  const hasImage = !imgError && !!product.images?.[0];
 
-  const cardStyle: React.CSSProperties = {
-    background: 'linear-gradient(172deg, rgba(255,255,255,0.92) 0%, rgba(247,251,255,0.82) 55%, rgba(238,247,255,0.78) 100%)',
-    backdropFilter: 'blur(22px) saturate(160%)',
-    WebkitBackdropFilter: 'blur(22px) saturate(160%)',
-    border: '1px solid rgba(255,255,255,0.75)',
-    boxShadow: '0 16px 38px -24px rgba(23,97,139,0.32), 0 4px 14px -10px rgba(23,97,139,0.14), inset 0 1px 0 rgba(255,255,255,0.78)',
+  // Single badge with explicit priority: NEW > BEST > PROMO
+  type BadgeKind = 'new' | 'best' | 'promo';
+  const primaryBadge: { kind: BadgeKind; label: string } | null = product.is_new
+    ? { kind: 'new', label: lang === 'ar' ? 'جديد' : 'NOUVEAU' }
+    : product.is_best_seller
+      ? { kind: 'best', label: lang === 'ar' ? 'الأكثر مبيعاً' : 'TOP VENTE' }
+      : (isPromo && discountPct > 0)
+        ? { kind: 'promo', label: `-${discountPct}%` }
+        : null;
+
+  const badgeStyle: Record<BadgeKind, React.CSSProperties> = {
+    new: {
+      background: 'linear-gradient(135deg,#0f172a 0%,#334155 100%)',
+      color: '#ffffff',
+      boxShadow: '0 6px 14px -6px rgba(15,23,42,0.5), inset 0 1px 0 rgba(255,255,255,0.2)',
+    },
+    best: {
+      background: 'linear-gradient(135deg,#fde68a 0%,#fbbf24 100%)',
+      color: '#5a3a00',
+      boxShadow: '0 6px 14px -6px rgba(251,191,36,0.55), inset 0 1px 0 rgba(255,255,255,0.55)',
+    },
+    promo: {
+      background: `linear-gradient(135deg,${CORAL_PRIMARY} 0%,${CORAL_LIGHT} 100%)`,
+      color: '#ffffff',
+      boxShadow: '0 6px 14px -6px rgba(155,63,0,0.6), inset 0 1px 0 rgba(255,255,255,0.35)',
+    },
   };
 
   return (
     <Link
       to={`/product/${product.id}`}
-      className="group relative flex h-full flex-col rounded-[1.6rem] transition-all duration-500 ease-out will-change-transform hover:-translate-y-[6px] hover:shadow-[0_30px_60px_-28px_rgba(23,97,139,0.42)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#ff7a2e]/60"
-      style={cardStyle}
+      aria-label={name}
+      aria-disabled={isOutOfStock || undefined}
+      className={`group relative flex h-full flex-col overflow-hidden rounded-[20px] border border-white/75
+                  transition-all duration-200 ease-out focus-visible:outline-none
+                  focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[${CORAL_LIGHT}]/60
+                  ${isOutOfStock
+                    ? 'opacity-60 cursor-not-allowed shadow-sm'
+                    : 'hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-lg shadow-sm'
+                  }`}
+      style={{
+        background: 'linear-gradient(172deg, rgba(255,255,255,0.94) 0%, rgba(247,251,255,0.88) 55%, rgba(238,247,255,0.82) 100%)',
+        backdropFilter: 'blur(14px) saturate(150%)',
+        WebkitBackdropFilter: 'blur(14px) saturate(150%)',
+        boxShadow: isOutOfStock
+          ? '0 3px 10px -6px rgba(23,97,139,0.18)'
+          : '0 4px 14px -8px rgba(23,97,139,0.22), inset 0 1px 0 rgba(255,255,255,0.8)',
+      }}
     >
+      {/* IMAGE ZONE — 1:1 aspect, dominant */}
       <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-[1.6rem] opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-        style={{ background: 'radial-gradient(120% 60% at 50% 0%, rgba(255,122,46,0.10) 0%, rgba(255,122,46,0) 60%)' }}
-      />
-
-      <div
-        className="relative overflow-hidden rounded-t-[1.6rem]"
-        style={{ aspectRatio: '1 / 0.96', background: 'linear-gradient(150deg,#f4f9ff 0%,#e6f1ff 55%,#dae9fb 100%)' }}
+        className="relative m-3 mb-0 overflow-hidden rounded-[16px]"
+        style={{
+          aspectRatio: '1 / 1',
+          background: hasImage
+            ? 'linear-gradient(150deg,#f4f9ff 0%,#e6f1ff 55%,#dae9fb 100%)'
+            : 'linear-gradient(150deg,#f1f5f9 0%,#e2e8f0 100%)',
+        }}
       >
+        {/* Subtle radial highlight */}
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0"
-          style={{ background: 'radial-gradient(70% 60% at 50% 45%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 70%)' }}
+          style={{ background: 'radial-gradient(70% 60% at 50% 40%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 70%)' }}
         />
 
-        <img
-          src={imgError ? fallback : (product.images?.[0] || fallback)}
-          alt={name}
-          loading="lazy"
-          onError={() => setImgError(true)}
-          className={`relative h-full w-full object-contain p-4 md:p-5 transition-transform duration-[700ms] ease-out group-hover:scale-[1.07] ${isOutOfStock ? 'opacity-40 grayscale-[60%]' : ''}`}
-          style={{ filter: isOutOfStock ? undefined : 'drop-shadow(0 18px 22px rgba(23,97,139,0.18))' }}
-        />
+        {hasImage ? (
+          <img
+            src={product.images?.[0] || LOCAL_PRODUCT_FALLBACK}
+            alt={name}
+            loading="lazy"
+            decoding="async"
+            onError={() => setImgError(true)}
+            className={`relative h-full w-full object-contain p-3 transition-transform duration-500 ease-out will-change-transform ${
+              isOutOfStock ? 'grayscale-[55%]' : 'group-hover:scale-[1.06]'
+            }`}
+            style={{ filter: isOutOfStock ? undefined : 'drop-shadow(0 12px 16px rgba(23,97,139,0.16))' }}
+          />
+        ) : (
+          // Elegant placeholder when no image available
+          <div className="relative flex h-full w-full items-center justify-center">
+            <div
+              className="flex h-16 w-16 items-center justify-center rounded-full"
+              style={{ background: 'linear-gradient(135deg, rgba(100,116,139,0.15), rgba(148,163,184,0.22))' }}
+            >
+              <Package size={28} className="text-slate-400" strokeWidth={1.6} />
+            </div>
+          </div>
+        )}
 
-        <div className="pointer-events-none absolute top-3 start-3 flex flex-col items-start gap-1.5">
-          {isPromo && discountPct > 0 && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full px-2.5 py-[5px] text-[10px] font-black tracking-wide text-white"
-              style={{
-                background: `linear-gradient(135deg,${ETHEREAL_PRIMARY} 0%,${ETHEREAL_PRIMARY_LIGHT} 100%)`,
-                boxShadow: '0 8px 22px -8px rgba(155,63,0,0.70), inset 0 1px 0 rgba(255,255,255,0.4)',
-                letterSpacing: '0.03em',
-              }}
-            >
-              <Sparkles size={9} className="shrink-0" strokeWidth={2.5} />
-              -{discountPct}%
-            </span>
-          )}
-          {product.is_new && !isPromo && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full px-2.5 py-[5px] text-[10px] font-black tracking-wide text-white"
-              style={{
-                background: 'linear-gradient(135deg,#0f172a 0%,#334155 100%)',
-                boxShadow: '0 6px 16px -6px rgba(15,23,42,0.55), inset 0 1px 0 rgba(255,255,255,0.18)',
-                letterSpacing: '0.04em',
-              }}
-            >
-              {lang === 'ar' ? 'جديد' : 'NOUVEAU'}
-            </span>
-          )}
-          {product.is_best_seller && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full px-2.5 py-[5px] text-[10px] font-black tracking-wide"
-              style={{
-                background: 'linear-gradient(135deg,#fde68a 0%,#fbbf24 100%)',
-                color: '#5a3a00',
-                boxShadow: '0 6px 16px -6px rgba(251,191,36,0.55), inset 0 1px 0 rgba(255,255,255,0.55)',
-                letterSpacing: '0.04em',
-              }}
-            >
-              ⭐ {lang === 'ar' ? 'الأكثر مبيعاً' : 'TOP VENTE'}
-            </span>
-          )}
-        </div>
+        {/* Priority badge — top-start */}
+        {primaryBadge && !isOutOfStock && (
+          <span
+            className="absolute top-2 start-2 inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide"
+            style={{ ...badgeStyle[primaryBadge.kind], letterSpacing: '0.04em' }}
+          >
+            {primaryBadge.label}
+          </span>
+        )}
 
+        {/* Wishlist — top-end */}
         <button
           type="button"
           onClick={toggleWishlist}
-          aria-label={wishlisted ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-          className={`absolute top-3 end-3 flex h-9 w-9 items-center justify-center rounded-full transition-all duration-300 ${
-            wishlisted ? 'scale-110 text-white' : 'text-gray-500 hover:scale-105 hover:text-[#9b3f00]'
+          aria-label={wishlisted
+            ? (lang === 'ar' ? 'إزالة من المفضلة' : 'Retirer des favoris')
+            : (lang === 'ar' ? 'إضافة للمفضلة' : 'Ajouter aux favoris')}
+          className={`absolute top-2 end-2 flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 ${
+            wishlisted ? 'scale-105 text-white' : 'text-slate-500 hover:text-[' + CORAL_PRIMARY + '] hover:scale-105'
           }`}
           style={
             wishlisted
               ? {
-                  background: `linear-gradient(135deg,${ETHEREAL_PRIMARY},${ETHEREAL_PRIMARY_LIGHT})`,
-                  boxShadow: '0 8px 18px -6px rgba(155,63,0,0.55), inset 0 1px 0 rgba(255,255,255,0.3)',
-                  border: '1px solid rgba(255,255,255,0.4)',
+                  background: `linear-gradient(135deg,${CORAL_PRIMARY},${CORAL_LIGHT})`,
+                  boxShadow: '0 6px 14px -6px rgba(155,63,0,0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
+                  border: '1px solid rgba(255,255,255,0.45)',
                 }
               : {
-                  background: 'rgba(255,255,255,0.82)',
-                  backdropFilter: 'blur(10px)',
-                  WebkitBackdropFilter: 'blur(10px)',
-                  border: '1px solid rgba(255,255,255,0.85)',
-                  boxShadow: '0 6px 14px -6px rgba(23,97,139,0.25), inset 0 1px 0 rgba(255,255,255,0.7)',
+                  background: 'rgba(255,255,255,0.88)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255,255,255,0.9)',
+                  boxShadow: '0 4px 10px -6px rgba(23,97,139,0.22), inset 0 1px 0 rgba(255,255,255,0.7)',
                 }
           }
         >
-          <Heart size={14} strokeWidth={2.2} className={wishlisted ? 'fill-current' : ''} />
+          <Heart size={13} strokeWidth={2.2} className={wishlisted ? 'fill-current' : ''} />
         </button>
 
+        {/* Out-of-stock overlay */}
         {isOutOfStock && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/35 backdrop-blur-[3px]">
+          <div className="absolute inset-0 flex items-center justify-center bg-white/40 backdrop-blur-[2px]">
             <span
-              className="rounded-full px-4 py-[7px] text-[11px] font-black tracking-[0.08em] text-white"
-              style={{ background: 'linear-gradient(135deg,#1f2937 0%,#0f172a 100%)', boxShadow: '0 10px 20px -8px rgba(15,23,42,0.5)' }}
-            >
-              {lang === 'ar' ? 'نفدت الكمية' : 'EPUISE'}
-            </span>
-          </div>
-        )}
-
-        {!isOutOfStock && (
-          <div className="absolute inset-x-3 bottom-3 translate-y-[120%] opacity-0 transition-all duration-300 ease-out group-hover:translate-y-0 group-hover:opacity-100">
-            <button
-              type="button"
-              onClick={handleAdd}
-              className="flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-[12px] font-black tracking-wide text-white transition-colors duration-300"
+              className="rounded-full px-3 py-1 text-[10.5px] font-black uppercase tracking-[0.08em] text-white"
               style={{
-                background: addedAnim
-                  ? 'linear-gradient(135deg,#16a34a 0%,#22c55e 100%)'
-                  : `linear-gradient(135deg,${ETHEREAL_PRIMARY} 0%,${ETHEREAL_PRIMARY_LIGHT} 100%)`,
-                boxShadow: addedAnim
-                  ? '0 10px 24px -10px rgba(22,163,74,0.6), inset 0 1px 0 rgba(255,255,255,0.3)'
-                  : '0 12px 24px -10px rgba(155,63,0,0.6), inset 0 1px 0 rgba(255,255,255,0.3)',
-                letterSpacing: '0.03em',
+                background: 'linear-gradient(135deg,#475569 0%,#334155 100%)',
+                boxShadow: '0 8px 16px -6px rgba(51,65,85,0.55)',
               }}
             >
-              <ShoppingCart size={13} strokeWidth={2.4} />
-              {addedAnim
-                ? (lang === 'ar' ? '✓ تمت الإضافة' : '✓ Ajouté !')
-                : (lang === 'ar' ? 'أضف للسلة' : 'Ajouter au panier')}
-            </button>
+              {lang === 'ar' ? 'نفدت الكمية' : 'Rupture de stock'}
+            </span>
           </div>
         )}
       </div>
 
-      <div className="flex flex-1 flex-col gap-2.5 p-4 md:p-[1.05rem]">
+      {/* CONTENT ZONE — compact */}
+      <div className="flex flex-1 flex-col gap-1.5 p-3">
+        {/* Name — 2 lines max, reserve 2 lines of height to stabilise layout */}
         <h3
-          className="line-clamp-2 min-h-[2.6rem] text-[14px] font-bold leading-snug transition-colors duration-300 group-hover:text-[#9b3f00] md:text-[15px]"
-          style={{ color: '#1f2937', letterSpacing: '-0.005em' }}
+          className="line-clamp-2 text-[15px] font-semibold leading-snug transition-colors duration-200 group-hover:text-[#9b3f00]"
+          style={{ color: '#1e293b', minHeight: '2.45rem' }}
         >
           {name}
         </h3>
 
-        {(reviews > 0 || salesCount > 0) && (
-          <div className="flex min-h-[1rem] items-center gap-1.5">
-            <div className="flex items-center">
-              {[1,2,3,4,5].map(i => (
-                <Star
-                  key={i}
-                  size={11}
-                  className={i <= Math.round(rating) ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-200'}
-                  strokeWidth={1.5}
-                />
-              ))}
-            </div>
-            <span className="text-[11px] font-semibold text-gray-600">{rating.toFixed(1)}</span>
-            <span className="text-[10px] font-medium text-gray-400">
-              {reviews > 0 ? `(${reviews})` : `(${salesCount}+)`}
-            </span>
+        {/* Rating — small, discreet */}
+        <div className="flex items-center gap-1">
+          <div className="flex items-center">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Star
+                key={i}
+                size={12}
+                strokeWidth={1.5}
+                className={i <= Math.round(rating) ? 'fill-amber-400 text-amber-400' : 'fill-slate-200 text-slate-200'}
+              />
+            ))}
           </div>
-        )}
+          <span className="text-[11px] font-semibold text-slate-600">{rating.toFixed(1)}</span>
+          {reviewOrSales > 0 && (
+            <span className="text-[10px] font-medium text-slate-400">({reviewOrSales})</span>
+          )}
+        </div>
 
-        <div className="mt-auto flex items-end justify-between gap-2 pt-1">
-          <div className="flex flex-wrap items-baseline gap-2">
-            <span
-              className="font-black leading-none tracking-tight"
-              style={{ color: ETHEREAL_PRIMARY, fontSize: 'clamp(17px, 2vw, 21px)', letterSpacing: '-0.02em' }}
-            >
-              {formatPrice(effectivePrice, lang)}
+        {/* Price — current + old if promo */}
+        <div className="flex flex-wrap items-baseline gap-2">
+          <span
+            className="font-black leading-none tracking-tight"
+            style={{ color: CORAL_PRIMARY, fontSize: '18px', letterSpacing: '-0.02em' }}
+          >
+            {formatPrice(effectivePrice, lang)}
+          </span>
+          {isPromo && (
+            <span className="text-[13px] font-medium leading-none text-slate-400 line-through">
+              {formatPrice(product.price, lang)}
             </span>
-            {isPromo && (
-              <span className="text-[12px] font-semibold leading-none text-gray-400 line-through">
-                {formatPrice(product.price, lang)}
-              </span>
-            )}
-          </div>
+          )}
+        </div>
 
-          {!isOutOfStock && (
+        {/* Bottom row — delivery badge + CTA */}
+        <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10.5px] font-bold"
+            style={{
+              color: '#15803d',
+              background: 'rgba(220,252,231,0.85)',
+              border: '1px solid rgba(167,243,208,0.7)',
+            }}
+          >
+            <Truck size={11} strokeWidth={2.2} className="shrink-0" />
+            {lang === 'ar' ? 'توصيل مجاني' : 'Livraison gratuite'}
+          </span>
+
+          {!isOutOfStock ? (
             <button
               type="button"
               onClick={handleAdd}
               aria-label={lang === 'ar' ? 'أضف للسلة' : 'Ajouter au panier'}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition-all duration-300 group-hover:translate-x-2 group-hover:opacity-0"
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition-all duration-200 hover:scale-110 active:scale-95 ${
+                addedAnim ? 'scale-105' : ''
+              }`}
               style={{
-                background: `linear-gradient(135deg,${ETHEREAL_PRIMARY} 0%,${ETHEREAL_PRIMARY_LIGHT} 100%)`,
-                boxShadow: '0 10px 20px -8px rgba(155,63,0,0.55), inset 0 1px 0 rgba(255,255,255,0.35)',
+                background: addedAnim
+                  ? 'linear-gradient(135deg,#16a34a 0%,#22c55e 100%)'
+                  : `linear-gradient(135deg,${CORAL_PRIMARY} 0%,${CORAL_LIGHT} 100%)`,
+                boxShadow: addedAnim
+                  ? '0 8px 18px -8px rgba(22,163,74,0.6), inset 0 1px 0 rgba(255,255,255,0.3)'
+                  : '0 8px 18px -8px rgba(155,63,0,0.6), inset 0 1px 0 rgba(255,255,255,0.35)',
               }}
             >
               <ShoppingCart size={14} strokeWidth={2.4} />
             </button>
+          ) : (
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400"
+              style={{ background: 'rgba(226,232,240,0.7)', border: '1px solid rgba(203,213,225,0.7)' }}
+              aria-hidden
+            >
+              <ShoppingCart size={14} strokeWidth={2.2} />
+            </span>
           )}
         </div>
-
-        <span
-          className="inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-[5px] text-[10.5px] font-bold"
-          style={{
-            color: '#065f46',
-            background: 'linear-gradient(135deg,rgba(209,250,229,0.9) 0%,rgba(220,252,231,0.85) 100%)',
-            border: '1px solid rgba(167,243,208,0.7)',
-            letterSpacing: '0.01em',
-          }}
-        >
-          <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3"/>
-            <rect x="9" y="11" width="14" height="10" rx="1"/>
-            <circle cx="12" cy="21" r="1"/>
-            <circle cx="20" cy="21" r="1"/>
-          </svg>
-          {lang === 'ar' ? 'توصيل مجاني' : 'Livraison gratuite'}
-        </span>
       </div>
+    </Link>
+  );
+}
+
+/**
+ * ProductCardSkeleton — shimmer placeholder matching ProductCard layout.
+ */
+export function ProductCardSkeleton() {
+  return (
+    <div
+      className="relative flex h-full flex-col overflow-hidden rounded-[20px] border border-white/70 bg-white/80"
+      style={{ boxShadow: '0 4px 14px -8px rgba(23,97,139,0.15)' }}
+    >
+      <div className="m-3 mb-0 aspect-square animate-pulse rounded-[16px] bg-gradient-to-br from-slate-100 to-slate-200" />
+      <div className="flex flex-1 flex-col gap-1.5 p-3">
+        <div className="h-4 w-11/12 animate-pulse rounded bg-slate-200" />
+        <div className="h-4 w-7/12 animate-pulse rounded bg-slate-200" />
+        <div className="mt-1 h-3 w-1/3 animate-pulse rounded bg-slate-200" />
+        <div className="mt-2 h-5 w-1/2 animate-pulse rounded bg-slate-200" />
+        <div className="mt-auto flex items-center justify-between pt-2">
+          <div className="h-5 w-24 animate-pulse rounded-full bg-slate-200" />
+          <div className="h-9 w-9 animate-pulse rounded-full bg-slate-200" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * DiscoverMoreCard — replaces a dangling single-product card with
+ * a clickable "Discover more" placeholder so grids never look lonely.
+ */
+export function DiscoverMoreCard({ href = '/shop' }: { href?: string }) {
+  const { lang } = useLang();
+  return (
+    <Link
+      to={href}
+      className="group relative flex h-full flex-col items-center justify-center overflow-hidden rounded-[20px] border border-dashed border-slate-300/80 p-6 text-center transition-all duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[#ff7a2e]/50 hover:shadow-lg"
+      style={{
+        background: 'linear-gradient(172deg, rgba(255,255,255,0.88) 0%, rgba(247,251,255,0.78) 55%, rgba(255,237,224,0.65) 100%)',
+        backdropFilter: 'blur(12px) saturate(150%)',
+        WebkitBackdropFilter: 'blur(12px) saturate(150%)',
+      }}
+    >
+      <div
+        className="mb-3 flex h-14 w-14 items-center justify-center rounded-full transition-transform duration-200 group-hover:scale-110"
+        style={{
+          background: `linear-gradient(135deg,${CORAL_PRIMARY},${CORAL_LIGHT})`,
+          boxShadow: '0 10px 22px -10px rgba(155,63,0,0.5), inset 0 1px 0 rgba(255,255,255,0.35)',
+        }}
+      >
+        <ChevronRight size={22} className="text-white rtl:rotate-180" strokeWidth={2.4} />
+      </div>
+      <p className="text-[15px] font-black tracking-tight text-slate-800" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+        {lang === 'ar' ? 'اكتشف المزيد' : 'Découvrir plus'}
+      </p>
+      <p className="mt-1 text-[12px] font-medium text-slate-500">
+        {lang === 'ar' ? 'تصفح كامل المجموعة' : 'Parcourir toute la collection'}
+      </p>
     </Link>
   );
 }

@@ -200,63 +200,68 @@ export function HeroCarousel({ lang, dir, fallback, className }: Props) {
           </AnimatePresence>
         </div>
 
-        {/* Text panel layer */}
-        <div className="relative z-10 grid gap-4 md:gap-6 lg:grid-cols-[1.05fr_0.95fr] p-3 md:p-5 min-h-[320px] md:min-h-[480px]">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={current.id + ':panel'}
-              initial={trans.initial}
-              animate={trans.animate}
-              exit={trans.exit}
-              transition={trans.transition}
-              className={`relative overflow-hidden rounded-[1.75rem] p-5 md:p-9 flex flex-col justify-center ${alignClass}`}
-              style={{
-                ...panelBg,
-                color: panel.text_color || '#10223c',
-                boxShadow: '0 24px 60px -22px rgba(16,34,60,0.30), inset 0 1px 0 rgba(255,255,255,0.55)',
-              }}
-            >
-              {overlay && (
-                <div
-                  aria-hidden
-                  className="absolute inset-0 pointer-events-none"
-                  style={overlay}
-                />
-              )}
-              <div className="relative z-10 max-w-xl w-full">
-                {title && (
-                  <h1
-                    className="font-black text-[2rem] md:text-5xl leading-[1.08] tracking-tight mb-3 md:mb-4"
-                    style={{ fontFamily: 'Montserrat, sans-serif' }}
-                  >
-                    {title}
-                  </h1>
+        {/* Text panel layer — hidden when show_text_overlay === false */}
+        {panel.show_text_overlay !== false ? (
+          <div className="relative z-10 grid gap-4 md:gap-6 lg:grid-cols-[1.05fr_0.95fr] p-3 md:p-5 min-h-[320px] md:min-h-[480px]">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={current.id + ':panel'}
+                initial={trans.initial}
+                animate={trans.animate}
+                exit={trans.exit}
+                transition={trans.transition}
+                className={`relative overflow-hidden rounded-[1.75rem] p-5 md:p-9 flex flex-col justify-center ${alignClass}`}
+                style={{
+                  ...panelBg,
+                  color: panel.text_color || '#10223c',
+                  boxShadow: '0 24px 60px -22px rgba(16,34,60,0.30), inset 0 1px 0 rgba(255,255,255,0.55)',
+                }}
+              >
+                {overlay && (
+                  <div
+                    aria-hidden
+                    className="absolute inset-0 pointer-events-none"
+                    style={overlay}
+                  />
                 )}
-                {subtitle && (
-                  <p className="text-sm md:text-xl font-medium mb-5 md:mb-7 opacity-90">
-                    {subtitle}
-                  </p>
-                )}
-                {ctaLabel && (
-                  <Link
-                    to={ctaHref}
-                    className="group inline-flex items-center justify-center gap-2.5 px-6 py-3 rounded-full font-black text-sm uppercase tracking-[0.12em] transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] shadow-xl text-white"
-                    style={{
-                      background: 'linear-gradient(135deg,#9b3f00,#ff7a2e)',
-                      boxShadow: '0 10px 28px rgba(155,63,0,0.34)',
-                    }}
-                  >
-                    {ctaLabel}
-                    <ChevronRight size={16} className="rtl:rotate-180 transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1" />
-                  </Link>
-                )}
-              </div>
-            </motion.div>
-          </AnimatePresence>
+                <div className="relative z-10 max-w-xl w-full">
+                  {title && (
+                    <h1
+                      className="font-black text-[2rem] md:text-5xl leading-[1.08] tracking-tight mb-3 md:mb-4"
+                      style={{ fontFamily: 'Montserrat, sans-serif' }}
+                    >
+                      {title}
+                    </h1>
+                  )}
+                  {subtitle && (
+                    <p className="text-sm md:text-xl font-medium mb-5 md:mb-7 opacity-90">
+                      {subtitle}
+                    </p>
+                  )}
+                  {ctaLabel && (
+                    <Link
+                      to={ctaHref}
+                      className="group inline-flex items-center justify-center gap-2.5 px-6 py-3 rounded-full font-black text-sm uppercase tracking-[0.12em] transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] shadow-xl text-white"
+                      style={{
+                        background: 'linear-gradient(135deg,#9b3f00,#ff7a2e)',
+                        boxShadow: '0 10px 28px rgba(155,63,0,0.34)',
+                      }}
+                    >
+                      {ctaLabel}
+                      <ChevronRight size={16} className="rtl:rotate-180 transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1" />
+                    </Link>
+                  )}
+                </div>
+              </motion.div>
+            </AnimatePresence>
 
-          {/* Right media preview placeholder – keeps hero layout balanced */}
-          <div className="hidden lg:block" aria-hidden />
-        </div>
+            {/* Right media preview placeholder – keeps hero layout balanced */}
+            <div className="hidden lg:block" aria-hidden />
+          </div>
+        ) : (
+          // Media-only mode: keep the hero height so prev/next arrows stay centered
+          <div className="relative z-0 min-h-[320px] md:min-h-[480px]" aria-hidden />
+        )}
 
         {/* Prev / Next (only if >1 slide) */}
         {activeSlides.length > 1 && (
