@@ -20,6 +20,9 @@ import {
   MessageSquare,
   Mail,
   X,
+  Plus,
+  Trash2,
+  Star as StarIcon,
 } from 'lucide-react';
 import { adminApi, api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -56,6 +59,28 @@ type MediaItem = {
   content_type?: string;
 };
 
+type TrustItem = {
+  id: string;
+  icon: string;
+  value_fr: string;
+  value_ar: string;
+  label_fr: string;
+  label_ar: string;
+  color: string;
+};
+
+type TestimonialItem = {
+  id: string;
+  author_fr: string;
+  author_ar: string;
+  wilaya_fr: string;
+  wilaya_ar: string;
+  quote_fr: string;
+  quote_ar: string;
+  avatar: string;
+  rating: number;
+};
+
 type HomepageSection = {
   enabled: boolean;
   title_fr: string;
@@ -70,7 +95,32 @@ type HomepageSection = {
   source_ref: string;
   style_variant: string;
   limit?: number;
+  trust_items?: TrustItem[];
+  testimonial_items?: TestimonialItem[];
 };
+
+const TRUST_ICON_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'shield', label: 'Bouclier' },
+  { value: 'truck', label: 'Camion' },
+  { value: 'award', label: 'Trophée' },
+  { value: 'users', label: 'Clients' },
+  { value: 'package', label: 'Colis' },
+  { value: 'clock', label: 'Horloge' },
+  { value: 'star', label: 'Étoile' },
+  { value: 'heart', label: 'Cœur' },
+  { value: 'credit-card', label: 'Paiement' },
+  { value: 'headphones', label: 'Support' },
+];
+
+const WILAYA_PRESETS_FR = [
+  'Alger', 'Oran', 'Constantine', 'Annaba', 'Blida', 'Batna',
+  'Sétif', 'Tizi Ouzou', 'Béjaïa', 'Tlemcen', 'Ghardaïa', 'Ouargla',
+];
+
+const WILAYA_PRESETS_AR = [
+  'الجزائر', 'وهران', 'قسنطينة', 'عنابة', 'البليدة', 'باتنة',
+  'سطيف', 'تيزي وزو', 'بجاية', 'تلمسان', 'غرداية', 'ورقلة',
+];
 
 type HomepageConfig = {
   sections_order: SectionKey[];
@@ -162,6 +212,51 @@ const DEFAULT_SECTION: HomepageSection = {
   style_variant: 'default',
 };
 
+const DEFAULT_TRUST_ITEMS: TrustItem[] = [
+  { id: 'trust-delivery', icon: 'truck', value_fr: '48h', value_ar: '48 ساعة', label_fr: 'Livraison 58 wilayas', label_ar: 'توصيل لـ 58 ولاية', color: '#145f8e' },
+  { id: 'trust-orders', icon: 'package', value_fr: '15 000+', value_ar: '+15 000', label_fr: 'Commandes livrées', label_ar: 'طلبات مُسلَّمة', color: '#8b3f14' },
+  { id: 'trust-products', icon: 'award', value_fr: '300+', value_ar: '+300', label_fr: 'Produits éducatifs', label_ar: 'منتجات تعليمية', color: '#0EA5E9' },
+  { id: 'trust-clients', icon: 'users', value_fr: '50 000+', value_ar: '+50 000', label_fr: 'Clients satisfaits', label_ar: 'عملاء راضون', color: '#15803d' },
+  { id: 'trust-payment', icon: 'credit-card', value_fr: 'Dahabia / CIB / COD', value_ar: 'ذهبية / CIB / الدفع عند التسليم', label_fr: 'Paiement sécurisé', label_ar: 'دفع آمن', color: '#7C3AED' },
+  { id: 'trust-support', icon: 'headphones', value_fr: '7j/7', value_ar: '7 أيام / 7', label_fr: 'Support dédié', label_ar: 'دعم مخصص', color: '#DC2626' },
+];
+
+const DEFAULT_TESTIMONIAL_ITEMS: TestimonialItem[] = [
+  {
+    id: 'testi-amina',
+    author_fr: 'Amina B.',
+    author_ar: 'أمينة ب.',
+    wilaya_fr: 'Alger',
+    wilaya_ar: 'الجزائر',
+    quote_fr: 'Livraison rapide et produits de qualité. Mes enfants adorent les cahiers colorés !',
+    quote_ar: 'توصيل سريع ومنتجات عالية الجودة. أطفالي يحبون الكراسات الملونة!',
+    avatar: '',
+    rating: 5,
+  },
+  {
+    id: 'testi-karim',
+    author_fr: 'Karim M.',
+    author_ar: 'كريم م.',
+    wilaya_fr: 'Oran',
+    wilaya_ar: 'وهران',
+    quote_fr: 'Service client à l’écoute et prix imbattables sur les fournitures scolaires.',
+    quote_ar: 'خدمة عملاء ممتازة وأسعار لا تُضاهى للأدوات المدرسية.',
+    avatar: '',
+    rating: 5,
+  },
+  {
+    id: 'testi-sofia',
+    author_fr: 'Sofia L.',
+    author_ar: 'صوفيا ل.',
+    wilaya_fr: 'Constantine',
+    wilaya_ar: 'قسنطينة',
+    quote_fr: 'Je recommande Verking Scolaire à toutes les mamans de la wilaya !',
+    quote_ar: 'أنصح بـ Verking Scolaire لجميع الأمهات في الولاية!',
+    avatar: '',
+    rating: 5,
+  },
+];
+
 const DEFAULT_CONFIG: HomepageConfig = {
   sections_order: [
     'hero',
@@ -232,13 +327,19 @@ const DEFAULT_CONFIG: HomepageConfig = {
     ...DEFAULT_SECTION,
     title_fr: 'Pourquoi nous choisir',
     title_ar: 'لماذا نحن',
+    subtitle_fr: 'Votre partenaire de confiance pour la rentrée scolaire en Algérie.',
+    subtitle_ar: 'شريككم الموثوق للدخول المدرسي في الجزائر.',
     style_variant: 'trust',
+    trust_items: DEFAULT_TRUST_ITEMS,
   },
   testimonials: {
     ...DEFAULT_SECTION,
-    title_fr: 'Témoignages',
-    title_ar: 'آراء العملاء',
+    title_fr: 'Ils nous font confiance',
+    title_ar: 'يثقون بنا',
+    subtitle_fr: 'Retours de parents à travers les 58 wilayas.',
+    subtitle_ar: 'آراء الأولياء عبر 58 ولاية.',
     style_variant: 'testimonials',
+    testimonial_items: DEFAULT_TESTIMONIAL_ITEMS,
   },
   newsletter: {
     ...DEFAULT_SECTION,
@@ -266,9 +367,51 @@ function isSectionKey(value: string): value is SectionKey {
   return Object.prototype.hasOwnProperty.call(SECTION_META, value);
 }
 
+function normalizeTrustItem(raw: any, fallback: TrustItem): TrustItem {
+  const merged = { ...fallback, ...(raw || {}) };
+  return {
+    id: normalizeSafeText(merged.id, fallback.id) || `trust-${Math.random().toString(36).slice(2, 8)}`,
+    icon: normalizeSafeText(merged.icon, fallback.icon) || 'shield',
+    value_fr: normalizeSafeText(merged.value_fr, fallback.value_fr),
+    value_ar: normalizeSafeText(merged.value_ar, fallback.value_ar),
+    label_fr: normalizeSafeText(merged.label_fr, fallback.label_fr),
+    label_ar: normalizeSafeText(merged.label_ar, fallback.label_ar),
+    color: normalizeSafeText(merged.color, fallback.color) || '#0EA5E9',
+  };
+}
+
+function normalizeTestimonialItem(raw: any, fallback: TestimonialItem): TestimonialItem {
+  const merged = { ...fallback, ...(raw || {}) };
+  const ratingNum = Number(merged.rating);
+  const rating = Number.isFinite(ratingNum) ? Math.max(1, Math.min(5, Math.round(ratingNum))) : fallback.rating;
+  return {
+    id: normalizeSafeText(merged.id, fallback.id) || `testi-${Math.random().toString(36).slice(2, 8)}`,
+    author_fr: normalizeSafeText(merged.author_fr, fallback.author_fr),
+    author_ar: normalizeSafeText(merged.author_ar, fallback.author_ar),
+    wilaya_fr: normalizeSafeText(merged.wilaya_fr, fallback.wilaya_fr),
+    wilaya_ar: normalizeSafeText(merged.wilaya_ar, fallback.wilaya_ar),
+    quote_fr: normalizeSafeText(merged.quote_fr, fallback.quote_fr),
+    quote_ar: normalizeSafeText(merged.quote_ar, fallback.quote_ar),
+    avatar: normalizeSafeText(merged.avatar, fallback.avatar),
+    rating,
+  };
+}
+
+function normalizeTrustItems(raw: any, fallback: TrustItem[]): TrustItem[] {
+  if (!Array.isArray(raw)) return fallback.map((item) => ({ ...item }));
+  const fb = fallback[0] || DEFAULT_TRUST_ITEMS[0];
+  return raw.slice(0, 12).map((entry: any, idx: number) => normalizeTrustItem(entry, fallback[idx] || fb));
+}
+
+function normalizeTestimonialItems(raw: any, fallback: TestimonialItem[]): TestimonialItem[] {
+  if (!Array.isArray(raw)) return fallback.map((item) => ({ ...item }));
+  const fb = fallback[0] || DEFAULT_TESTIMONIAL_ITEMS[0];
+  return raw.slice(0, 24).map((entry: any, idx: number) => normalizeTestimonialItem(entry, fallback[idx] || fb));
+}
+
 function normalizeSection(value: any, fallback: HomepageSection): HomepageSection {
   const merged = { ...fallback, ...(value || {}) };
-  return {
+  const base: HomepageSection = {
     enabled: normalizeBoolean(merged.enabled, fallback.enabled),
     title_fr: normalizeSafeText(merged.title_fr, fallback.title_fr),
     title_ar: normalizeSafeText(merged.title_ar, fallback.title_ar),
@@ -285,6 +428,13 @@ function normalizeSection(value: any, fallback: HomepageSection): HomepageSectio
     style_variant: normalizeSafeText(merged.style_variant, fallback.style_variant) || 'default',
     limit: merged.limit === undefined ? fallback.limit : normalizeOrder(merged.limit, fallback.limit || 8, 48),
   };
+  if (Array.isArray(fallback.trust_items) || Array.isArray(merged.trust_items)) {
+    base.trust_items = normalizeTrustItems(merged.trust_items, fallback.trust_items || DEFAULT_TRUST_ITEMS);
+  }
+  if (Array.isArray(fallback.testimonial_items) || Array.isArray(merged.testimonial_items)) {
+    base.testimonial_items = normalizeTestimonialItems(merged.testimonial_items, fallback.testimonial_items || DEFAULT_TESTIMONIAL_ITEMS);
+  }
+  return base;
 }
 
 function normalizeHomepageConfig(raw: any): HomepageConfig {
@@ -889,6 +1039,20 @@ export function AdminHomepage() {
                         placeholder="https://..."
                       />
                     </div>
+
+                    {sectionKey === 'trust' && (
+                      <TrustItemsEditor
+                        items={section.trust_items || []}
+                        onChange={(nextItems) => updateSection(sectionKey, { trust_items: nextItems })}
+                      />
+                    )}
+
+                    {sectionKey === 'testimonials' && (
+                      <TestimonialItemsEditor
+                        items={section.testimonial_items || []}
+                        onChange={(nextItems) => updateSection(sectionKey, { testimonial_items: nextItems })}
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -946,6 +1110,16 @@ export function AdminHomepage() {
                         <p className="mt-1 text-xs text-gray-700">{section.subtitle_fr}</p>
                         <p className="text-xs text-gray-500" dir="rtl">{section.subtitle_ar}</p>
                       </>
+                    )}
+                    {key === 'trust' && section.trust_items && section.trust_items.length > 0 && (
+                      <p className="mt-2 text-[11px] font-semibold text-sky-700">
+                        {section.trust_items.length} éléments de confiance
+                      </p>
+                    )}
+                    {key === 'testimonials' && section.testimonial_items && section.testimonial_items.length > 0 && (
+                      <p className="mt-2 text-[11px] font-semibold text-violet-700">
+                        {section.testimonial_items.length} témoignages
+                      </p>
                     )}
                     {(section.cta_fr || section.cta_ar) && (
                       <span className="mt-2 inline-flex rounded-full bg-blue-100 px-3 py-1 text-[11px] font-bold text-blue-700">
@@ -1044,7 +1218,284 @@ function LabeledTextarea({
         onChange={(event) => onChange(event.target.value)}
         rows={3}
         dir={dir}
+        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-blue-300 focus:outline-none"
       />
     </label>
+  );
+}
+
+function TrustItemsEditor({
+  items,
+  onChange,
+}: {
+  items: TrustItem[];
+  onChange: (items: TrustItem[]) => void;
+}) {
+  const updateItem = (index: number, patch: Partial<TrustItem>) => {
+    const next = items.map((item, i) => (i === index ? { ...item, ...patch } : item));
+    onChange(next);
+  };
+  const removeItem = (index: number) => {
+    if (items.length <= 3) {
+      toast.error('Au moins 3 elements sont requis pour la section confiance.');
+      return;
+    }
+    onChange(items.filter((_, i) => i !== index));
+  };
+  const addItem = () => {
+    if (items.length >= 12) {
+      toast.error('Maximum 12 elements.');
+      return;
+    }
+    onChange([
+      ...items,
+      {
+        id: `trust-${Date.now().toString(36)}`,
+        icon: 'shield',
+        value_fr: '',
+        value_ar: '',
+        label_fr: '',
+        label_ar: '',
+        color: '#0EA5E9',
+      },
+    ]);
+  };
+  return (
+    <div className="space-y-3 rounded-2xl border border-sky-200 bg-sky-50/40 p-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-black uppercase tracking-wide text-sky-700">Elements de confiance ({items.length})</p>
+        <button
+          type="button"
+          onClick={addItem}
+          className="inline-flex items-center gap-1 rounded-xl bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700"
+        >
+          <Plus size={12} />
+          Ajouter
+        </button>
+      </div>
+      {items.length === 0 && (
+        <p className="text-xs text-gray-500">Aucun element. Cliquez sur Ajouter pour en creer un.</p>
+      )}
+      {items.map((item, index) => (
+        <div key={item.id || index} className="space-y-2 rounded-xl border border-sky-100 bg-white p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-black uppercase tracking-wide text-gray-500">#{index + 1}</p>
+            <button
+              type="button"
+              onClick={() => removeItem(index)}
+              className="rounded-lg p-1 text-red-500 hover:bg-red-50"
+              title="Supprimer"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <label className="space-y-1 text-xs font-semibold text-gray-600">
+              <span>Icone</span>
+              <select
+                value={item.icon}
+                onChange={(event) => updateItem(index, { icon: event.target.value })}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+              >
+                {TRUST_ICON_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1 text-xs font-semibold text-gray-600">
+              <span>Couleur</span>
+              <input
+                type="color"
+                value={item.color || '#0EA5E9'}
+                onChange={(event) => updateItem(index, { color: event.target.value })}
+                className="h-9 w-full rounded-xl border border-gray-200 bg-white"
+              />
+            </label>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <LabeledInput
+              label="Valeur FR (ex: 15 000+)"
+              value={item.value_fr}
+              onChange={(value) => updateItem(index, { value_fr: normalizeSafeText(value, '') })}
+              placeholder="15 000+"
+            />
+            <LabeledInput
+              label="القيمة AR"
+              value={item.value_ar}
+              onChange={(value) => updateItem(index, { value_ar: normalizeSafeText(value, '') })}
+              dir="rtl"
+              placeholder="+15 000"
+            />
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <LabeledInput
+              label="Libelle FR"
+              value={item.label_fr}
+              onChange={(value) => updateItem(index, { label_fr: normalizeSafeText(value, '') })}
+              placeholder="Commandes livrees"
+            />
+            <LabeledInput
+              label="العنوان AR"
+              value={item.label_ar}
+              onChange={(value) => updateItem(index, { label_ar: normalizeSafeText(value, '') })}
+              dir="rtl"
+              placeholder="طلبات مسلمة"
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TestimonialItemsEditor({
+  items,
+  onChange,
+}: {
+  items: TestimonialItem[];
+  onChange: (items: TestimonialItem[]) => void;
+}) {
+  const updateItem = (index: number, patch: Partial<TestimonialItem>) => {
+    const next = items.map((item, i) => (i === index ? { ...item, ...patch } : item));
+    onChange(next);
+  };
+  const removeItem = (index: number) => {
+    if (items.length <= 1) {
+      toast.error('Au moins 1 temoignage est requis.');
+      return;
+    }
+    onChange(items.filter((_, i) => i !== index));
+  };
+  const addItem = () => {
+    if (items.length >= 24) {
+      toast.error('Maximum 24 temoignages.');
+      return;
+    }
+    onChange([
+      ...items,
+      {
+        id: `testi-${Date.now().toString(36)}`,
+        author_fr: '',
+        author_ar: '',
+        wilaya_fr: 'Alger',
+        wilaya_ar: 'الجزائر',
+        quote_fr: '',
+        quote_ar: '',
+        avatar: '',
+        rating: 5,
+      },
+    ]);
+  };
+  return (
+    <div className="space-y-3 rounded-2xl border border-violet-200 bg-violet-50/40 p-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-black uppercase tracking-wide text-violet-700">Temoignages ({items.length})</p>
+        <button
+          type="button"
+          onClick={addItem}
+          className="inline-flex items-center gap-1 rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700"
+        >
+          <Plus size={12} />
+          Ajouter
+        </button>
+      </div>
+      {items.length === 0 && (
+        <p className="text-xs text-gray-500">Aucun temoignage. Cliquez sur Ajouter pour en creer un.</p>
+      )}
+      {items.map((item, index) => (
+        <div key={item.id || index} className="space-y-2 rounded-xl border border-violet-100 bg-white p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-black uppercase tracking-wide text-gray-500">#{index + 1}</p>
+            <button
+              type="button"
+              onClick={() => removeItem(index)}
+              className="rounded-lg p-1 text-red-500 hover:bg-red-50"
+              title="Supprimer"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <LabeledInput
+              label="Auteur FR"
+              value={item.author_fr}
+              onChange={(value) => updateItem(index, { author_fr: normalizeSafeText(value, '') })}
+              placeholder="Amina B."
+            />
+            <LabeledInput
+              label="الاسم AR"
+              value={item.author_ar}
+              onChange={(value) => updateItem(index, { author_ar: normalizeSafeText(value, '') })}
+              dir="rtl"
+              placeholder="أمينة ب."
+            />
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <label className="space-y-1 text-xs font-semibold text-gray-600">
+              <span>Wilaya FR</span>
+              <select
+                value={item.wilaya_fr}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  const idx = WILAYA_PRESETS_FR.indexOf(next);
+                  updateItem(index, {
+                    wilaya_fr: next,
+                    wilaya_ar: idx >= 0 ? WILAYA_PRESETS_AR[idx] : item.wilaya_ar,
+                  });
+                }}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+              >
+                {WILAYA_PRESETS_FR.map((w) => (
+                  <option key={w} value={w}>{w}</option>
+                ))}
+              </select>
+            </label>
+            <LabeledInput
+              label="الولاية AR"
+              value={item.wilaya_ar}
+              onChange={(value) => updateItem(index, { wilaya_ar: normalizeSafeText(value, '') })}
+              dir="rtl"
+            />
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <LabeledTextarea
+              label="Citation FR"
+              value={item.quote_fr}
+              onChange={(value) => updateItem(index, { quote_fr: normalizeSafeText(value, '') })}
+            />
+            <LabeledTextarea
+              label="الاقتباس AR"
+              value={item.quote_ar}
+              onChange={(value) => updateItem(index, { quote_ar: normalizeSafeText(value, '') })}
+              dir="rtl"
+            />
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <LabeledInput
+              label="URL avatar (optionnel)"
+              value={item.avatar}
+              onChange={(value) => updateItem(index, { avatar: normalizeSafeText(value, '') })}
+              placeholder="https://..."
+            />
+            <label className="space-y-1 text-xs font-semibold text-gray-600">
+              <span>Note (1-5)</span>
+              <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3 py-2">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => updateItem(index, { rating: n })}
+                    className={n <= item.rating ? 'text-amber-500' : 'text-gray-300'}
+                  >
+                    <StarIcon size={16} fill={n <= item.rating ? 'currentColor' : 'none'} />
+                  </button>
+                ))}
+                <span className="ml-auto text-xs font-bold text-gray-700">{item.rating}/5</span>
+              </div>
+            </label>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

@@ -34,6 +34,28 @@ export type SectionKey =
   | 'newsletter'
   | 'wholesale';
 
+export type TrustItemLike = {
+  id?: string;
+  icon?: string;
+  value_fr?: string;
+  value_ar?: string;
+  label_fr?: string;
+  label_ar?: string;
+  color?: string;
+};
+
+export type TestimonialItemLike = {
+  id?: string;
+  author_fr?: string;
+  author_ar?: string;
+  wilaya_fr?: string;
+  wilaya_ar?: string;
+  quote_fr?: string;
+  quote_ar?: string;
+  avatar?: string;
+  rating?: number;
+};
+
 export type HomepageSection = {
   enabled: boolean;
   title_fr: string;
@@ -48,6 +70,8 @@ export type HomepageSection = {
   source_ref: string;
   style_variant: string;
   limit?: number;
+  trust_items?: TrustItemLike[];
+  testimonial_items?: TestimonialItemLike[];
 };
 
 export type HomepageConfigLike = {
@@ -273,17 +297,98 @@ function validateProductList(
 }
 
 function validateTrust(data: HomepageSection): ValidationIssue[] {
-  return [
+  const issues: ValidationIssue[] = [
     ...ruleBilingualTitle('trust', data),
     ...ruleCtaLinkShape('trust', data),
   ];
+  const items = Array.isArray(data.trust_items) ? data.trust_items : [];
+  if (items.length < 3) {
+    issues.push(
+      mkWarning(
+        'trust',
+        'trust_items',
+        'La section confiance devrait contenir au moins 3 éléments pour un rendu équilibré.',
+        'قسم الثقة يجب أن يحتوي على 3 عناصر على الأقل لعرض متوازن.',
+      ),
+    );
+  }
+  items.forEach((item, index) => {
+    const hasFrLabel = hasText(item?.label_fr);
+    const hasArLabel = hasText(item?.label_ar);
+    if (!hasFrLabel || !hasArLabel) {
+      issues.push(
+        mkWarning(
+          'trust',
+          `trust_items[${index}].label`,
+          `Élément de confiance #${index + 1}: libellé FR/AR incomplet.`,
+          `العنصر #${index + 1}: التسمية FR/AR غير مكتملة.`,
+        ),
+      );
+    }
+    const hasValue = hasText(item?.value_fr) || hasText(item?.value_ar);
+    if (!hasValue) {
+      issues.push(
+        mkWarning(
+          'trust',
+          `trust_items[${index}].value`,
+          `Élément de confiance #${index + 1}: valeur (chiffre ou texte) manquante.`,
+          `العنصر #${index + 1}: القيمة (رقم أو نص) ناقصة.`,
+        ),
+      );
+    }
+  });
+  return issues;
 }
 
 function validateTestimonials(data: HomepageSection): ValidationIssue[] {
-  return [
+  const issues: ValidationIssue[] = [
     ...ruleBilingualTitle('testimonials', data),
     ...ruleCtaLinkShape('testimonials', data),
   ];
+  const items = Array.isArray(data.testimonial_items) ? data.testimonial_items : [];
+  if (items.length < 1) {
+    issues.push(
+      mkWarning(
+        'testimonials',
+        'testimonial_items',
+        'Ajoutez au moins un témoignage pour activer le carrousel.',
+        'أضف شهادة واحدة على الأقل لتفعيل الشريط المتحرك.',
+      ),
+    );
+  }
+  items.forEach((item, index) => {
+    if (!hasText(item?.author_fr) && !hasText(item?.author_ar)) {
+      issues.push(
+        mkWarning(
+          'testimonials',
+          `testimonial_items[${index}].author`,
+          `Témoignage #${index + 1}: auteur manquant.`,
+          `الشهادة #${index + 1}: الاسم ناقص.`,
+        ),
+      );
+    }
+    if (!hasText(item?.quote_fr) && !hasText(item?.quote_ar)) {
+      issues.push(
+        mkWarning(
+          'testimonials',
+          `testimonial_items[${index}].quote`,
+          `Témoignage #${index + 1}: citation manquante.`,
+          `الشهادة #${index + 1}: الاقتباس ناقص.`,
+        ),
+      );
+    }
+    if (!hasText(item?.wilaya_fr) && !hasText(item?.wilaya_ar)) {
+      issues.push(
+        mkWarning(
+          'testimonials',
+          `testimonial_items[${index}].wilaya`,
+          `Témoignage #${index + 1}: wilaya manquante.`,
+          `الشهادة #${index + 1}: الولاية ناقصة.`,
+        ),
+      );
+    }
+  });
+  return issues;
 }
 
 function validateNewsletter(data: HomepageSection): ValidationIssue[] {

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { ChevronRight, Star, Package, Users, Award } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Star, Package, Users, Award, Shield, Truck, Clock, Heart, CreditCard, Headphones, Quote } from 'lucide-react';
 import { useLang } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { api } from '../lib/api';
@@ -12,6 +12,28 @@ import { CATEGORIES_UPDATED_EVENT, CATEGORIES_UPDATED_KEY, CONTENT_UPDATED_KEY }
 import { ProductCard } from '../components/ProductCard';
 
 type SourceMode = 'manual' | 'products' | 'categories' | 'banners';
+
+type TrustItemConfig = {
+  id?: string;
+  icon?: string;
+  value_fr?: string;
+  value_ar?: string;
+  label_fr?: string;
+  label_ar?: string;
+  color?: string;
+};
+
+type TestimonialItemConfig = {
+  id?: string;
+  author_fr?: string;
+  author_ar?: string;
+  wilaya_fr?: string;
+  wilaya_ar?: string;
+  quote_fr?: string;
+  quote_ar?: string;
+  avatar?: string;
+  rating?: number;
+};
 
 type HomepageSectionConfig = {
   enabled?: boolean;
@@ -27,7 +49,27 @@ type HomepageSectionConfig = {
   source_ref?: string;
   style_variant?: string;
   limit?: number;
+  trust_items?: TrustItemConfig[];
+  testimonial_items?: TestimonialItemConfig[];
 };
+
+const TRUST_ICON_MAP: Record<string, React.ComponentType<{ size?: number }>> = {
+  shield: Shield,
+  truck: Truck,
+  award: Award,
+  users: Users,
+  package: Package,
+  clock: Clock,
+  star: Star,
+  heart: Heart,
+  'credit-card': CreditCard,
+  headphones: Headphones,
+};
+
+function renderTrustIcon(iconKey: string | undefined, size = 22) {
+  const Cmp = TRUST_ICON_MAP[iconKey || 'shield'] || Shield;
+  return <Cmp size={size} />;
+}
 
 type HomepageConfig = {
   sections_order?: string[];
@@ -150,6 +192,7 @@ export function HomePage() {
   const [homepageConfig, setHomepageConfig] = useState<HomepageConfig>({});
   const [banners, setBanners] = useState<BannerRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [testimonialIndex, setTestimonialIndex] = useState(0);
 
   const loadHomeData = useCallback(async (showLoader = false) => {
     if (showLoader) setLoading(true);
@@ -412,6 +455,28 @@ export function HomePage() {
   const wholesaleSection = getSection('wholesale');
   const testimonialsSection = getSection('testimonials');
   const trustSection = getSection('trust');
+
+  // testimonials auto-rotate
+  useEffect(() => {
+    if (!testimonialsSection?.enabled) return undefined;
+    const items = (testimonialsSection as any)?.testimonial_items;
+    const count = Array.isArray(items) ? items.length : 3;
+    if (count <= 1) return undefined;
+    const timer = window.setInterval(() => {
+      setTestimonialIndex((prev) => (prev + 1) % count);
+    }, 6000);
+    return () => window.clearInterval(timer);
+  }, [testimonialsSection]);
+
+  const testimonialItems: TestimonialItemConfig[] = useMemo(() => {
+    const raw = (testimonialsSection as any)?.testimonial_items;
+    if (Array.isArray(raw) && raw.length > 0) return raw as TestimonialItemConfig[];
+    return [
+      { id: 'd1', author_fr: 'Amina B.', author_ar: 'أمينة ب.', wilaya_fr: 'Alger', wilaya_ar: 'الجزائر', quote_fr: 'Livraison rapide et produits de qualité. Mes enfants adorent les cahiers colorés !', quote_ar: 'توصيل سريع ومنتجات عالية الجودة. أطفالي يحبون الكراسات الملونة!', avatar: '', rating: 5 },
+      { id: 'd2', author_fr: 'Karim M.', author_ar: 'كريم م.', wilaya_fr: 'Oran', wilaya_ar: 'وهران', quote_fr: 'Service client à l’écoute et prix imbattables sur les fournitures scolaires.', quote_ar: 'خدمة عملاء ممتازة وأسعار لا تُضاهى للأدوات المدرسية.', avatar: '', rating: 5 },
+      { id: 'd3', author_fr: 'Sofia L.', author_ar: 'صوفيا ل.', wilaya_fr: 'Constantine', wilaya_ar: 'قسنطينة', quote_fr: 'Je recommande Verking Scolaire à toutes les mamans de la wilaya !', quote_ar: 'أنصح بـ Verking Scolaire لجميع الأمهات في الولاية!', avatar: '', rating: 5 },
+    ];
+  }, [testimonialsSection]);
 
   const heroBanner = resolveBannersBySource('hero', 'homepage_hero')[0];
   const promoBanners = resolveBannersBySource('promotions', 'promotion_strip');
@@ -822,71 +887,190 @@ export function HomePage() {
             </div>
           ) : null}
 
-          {/* Bento Row 4: Trust Stats */}
+          {/* Bento Row 4: Trust Stats — configurable from admin */}
           {trustSection.enabled !== false && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-5">
-              {[
-                { icon: <Package size={22} />, num: '15 000+', label: lang === 'ar' ? 'طلبات مُسلَّمة' : 'Commandes Livrées', color: 'text-[#8b3f14]' },
-                { icon: <Award size={22} />, num: '300+', label: lang === 'ar' ? 'منتجات تعليمية' : 'Produits Éducatifs', color: 'text-[#145f8e]' },
-                { icon: <Users size={22} />, num: '50 000+', label: lang === 'ar' ? 'عملاء راضون' : 'Clients Satisfaits', color: 'text-[#15803d]' },
-              ].map((stat, i) => (
-                <div
-                  key={i}
-                  className="relative overflow-hidden rounded-[2rem] p-5 md:p-7 flex flex-col items-center justify-center text-center gap-3 md:gap-4 transition-all duration-300 hover:-translate-y-1"
-                  style={{
-                    background: 'linear-gradient(180deg, rgba(255,255,255,0.54) 0%, rgba(255,255,255,0.38) 100%)',
-                    backdropFilter: 'blur(24px) saturate(135%)',
-                    WebkitBackdropFilter: 'blur(24px) saturate(135%)',
-                    border: '1px solid rgba(255,255,255,0.42)',
-                    boxShadow: '0 10px 32px rgba(123,168,207,0.16), inset 0 1px 0 rgba(255,255,255,0.58)',
-                  }}
-                >
+            <div className="space-y-4">
+              {(trustSection.title_fr || trustSection.title_ar) && (
+                <div className="text-center">
+                  <h2 className="font-black text-2xl md:text-3xl text-gray-900 mb-1" style={{ fontFamily: 'Montserrat, sans-serif', color: theme.primary_color }}>
+                    {pickLocalized(trustSection.title_fr, trustSection.title_ar, lang, lang === 'ar' ? 'لماذا نحن' : 'Pourquoi nous choisir')}
+                  </h2>
+                  {(trustSection.subtitle_fr || trustSection.subtitle_ar) && (
+                    <p className="text-gray-500 text-sm max-w-xl mx-auto">
+                      {pickLocalized(trustSection.subtitle_fr, trustSection.subtitle_ar, lang, '')}
+                    </p>
+                  )}
+                </div>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+                {(Array.isArray(trustSection.trust_items) && trustSection.trust_items.length > 0
+                  ? trustSection.trust_items
+                  : [
+                      { id: 'd1', icon: 'truck', value_fr: '48h', value_ar: '48 ساعة', label_fr: 'Livraison 58 wilayas', label_ar: 'توصيل لـ 58 ولاية', color: '#145f8e' },
+                      { id: 'd2', icon: 'package', value_fr: '15 000+', value_ar: '+15 000', label_fr: 'Commandes livrées', label_ar: 'طلبات مُسلَّمة', color: '#8b3f14' },
+                      { id: 'd3', icon: 'award', value_fr: '300+', value_ar: '+300', label_fr: 'Produits éducatifs', label_ar: 'منتجات تعليمية', color: '#0EA5E9' },
+                      { id: 'd4', icon: 'users', value_fr: '50 000+', value_ar: '+50 000', label_fr: 'Clients satisfaits', label_ar: 'عملاء راضون', color: '#15803d' },
+                    ]
+                ).map((item: TrustItemConfig, i: number) => {
+                  const value = pickLocalized(item.value_fr, item.value_ar, lang, item.value_fr || '');
+                  const label = pickLocalized(item.label_fr, item.label_ar, lang, item.label_fr || '');
+                  const accent = item.color || '#0EA5E9';
+                  return (
+                    <div
+                      key={item.id || i}
+                      className="relative overflow-hidden rounded-[2rem] p-5 md:p-6 flex flex-col items-center justify-center text-center gap-3 transition-all duration-300 hover:-translate-y-1"
+                      style={{
+                        background: 'linear-gradient(180deg, rgba(255,255,255,0.54) 0%, rgba(255,255,255,0.38) 100%)',
+                        backdropFilter: 'blur(24px) saturate(135%)',
+                        WebkitBackdropFilter: 'blur(24px) saturate(135%)',
+                        border: '1px solid rgba(255,255,255,0.42)',
+                        boxShadow: '0 10px 32px rgba(123,168,207,0.16), inset 0 1px 0 rgba(255,255,255,0.58)',
+                      }}
+                    >
+                      <div
+                        className="w-11 h-11 md:w-12 md:h-12 rounded-2xl flex items-center justify-center shadow-sm"
+                        style={{
+                          background: 'rgba(255,255,255,0.58)',
+                          border: '1px solid rgba(255,255,255,0.46)',
+                          color: accent,
+                        }}
+                      >
+                        {renderTrustIcon(item.icon, 22)}
+                      </div>
+                      <p
+                        className="font-black text-xl md:text-2xl lg:text-3xl leading-none tracking-tight"
+                        style={{ fontFamily: 'Montserrat, sans-serif', color: accent, textShadow: '0 4px 16px rgba(255,255,255,0.45)' }}
+                      >
+                        {value}
+                      </p>
+                      <p className="text-slate-700 font-semibold text-[11px] md:text-sm leading-tight">{label}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Testimonials — carousel with avatars + wilayas */}
+          {showTestimonialsSection && testimonialsSection.enabled !== false && testimonialItems.length > 0 && (() => {
+            const total = testimonialItems.length;
+            const safeIndex = ((testimonialIndex % total) + total) % total;
+            const active = testimonialItems[safeIndex];
+            const authorName = pickLocalized(active.author_fr, active.author_ar, lang, active.author_fr || '');
+            const wilayaName = pickLocalized(active.wilaya_fr, active.wilaya_ar, lang, active.wilaya_fr || '');
+            const quoteText = pickLocalized(active.quote_fr, active.quote_ar, lang, active.quote_fr || '');
+            const rating = Math.max(1, Math.min(5, Number(active.rating) || 5));
+            const initials = (authorName || '?').trim().split(/\s+/).map((part) => part.charAt(0)).join('').slice(0, 2).toUpperCase();
+            const goPrev = () => setTestimonialIndex((prev) => (prev - 1 + total) % total);
+            const goNext = () => setTestimonialIndex((prev) => (prev + 1) % total);
+            return (
+              <div
+                className="rounded-[1.75rem] p-6 md:p-10"
+                style={{
+                  background: 'rgba(255,255,255,0.78)',
+                  backdropFilter: 'blur(20px)',
+                  boxShadow: '0 20px 60px -10px rgba(30,80,140,0.10)',
+                }}
+              >
+                <div className="text-center mb-6 md:mb-8">
+                  <h2 className="font-black text-2xl md:text-3xl text-gray-900 mb-2" style={{ fontFamily: 'Montserrat, sans-serif', color: theme.primary_color }}>
+                    {pickLocalized(testimonialsSection.title_fr, testimonialsSection.title_ar, lang, lang === 'ar' ? 'يثقون بنا' : 'Ils nous font confiance')}
+                  </h2>
+                  {(testimonialsSection.subtitle_fr || testimonialsSection.subtitle_ar) && (
+                    <p className="text-gray-500 text-sm max-w-xl mx-auto">
+                      {pickLocalized(testimonialsSection.subtitle_fr, testimonialsSection.subtitle_ar, lang, '')}
+                    </p>
+                  )}
+                </div>
+
+                <div className="relative max-w-3xl mx-auto">
                   <div
-                    className={`w-11 h-11 md:w-12 md:h-12 rounded-2xl flex items-center justify-center shadow-sm ${stat.color}`}
+                    key={active.id || safeIndex}
+                    className="relative rounded-[1.5rem] p-6 md:p-8 transition-all"
                     style={{
-                      background: 'rgba(255,255,255,0.52)',
-                      border: '1px solid rgba(255,255,255,0.46)',
+                      background: 'linear-gradient(180deg, rgba(255,255,255,0.88) 0%, rgba(255,255,255,0.72) 100%)',
+                      border: '1px solid rgba(255,255,255,0.55)',
+                      boxShadow: '0 14px 40px -12px rgba(30,80,140,0.14), inset 0 1px 0 rgba(255,255,255,0.7)',
                     }}
                   >
-                    {stat.icon}
+                    <div className="absolute -top-4 left-6 md:left-10 w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-white" style={{ background: `linear-gradient(135deg, ${theme.primary_color || '#1A3C6E'}, ${theme.secondary_color || '#0f3853'})`, boxShadow: '0 8px 22px rgba(30,80,140,0.25)' }} aria-hidden>
+                      <Quote size={16} />
+                    </div>
+
+                    <div className="flex items-center gap-4 mb-4">
+                      {active.avatar ? (
+                        <img src={active.avatar} alt={authorName} className="w-14 h-14 md:w-16 md:h-16 rounded-full object-cover border-2 border-white shadow-md" />
+                      ) : (
+                        <div
+                          className="w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center font-black text-white text-lg md:text-xl border-2 border-white shadow-md"
+                          style={{ background: `linear-gradient(135deg, ${theme.primary_color || '#1A3C6E'}, ${theme.secondary_color || '#0f3853'})` }}
+                          aria-hidden
+                        >
+                          {initials || '?'}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-black text-base md:text-lg text-gray-900 truncate" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                          {authorName || (lang === 'ar' ? 'عميل' : 'Client')}
+                        </p>
+                        <p className="text-xs md:text-sm text-gray-500 font-semibold truncate">
+                          {wilayaName}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-0.5 shrink-0" aria-label={`${rating}/5`}>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <Star
+                            key={n}
+                            size={14}
+                            className={n <= rating ? 'text-amber-400' : 'text-gray-200'}
+                            fill={n <= rating ? 'currentColor' : 'none'}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <p className="text-gray-700 text-sm md:text-base leading-relaxed font-medium" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+                      “{quoteText}”
+                    </p>
                   </div>
-                  <p
-                    className={`font-black text-3xl md:text-4xl lg:text-5xl leading-none tracking-tight ${stat.color}`}
-                    style={{ fontFamily: 'Montserrat, sans-serif', textShadow: '0 4px 16px rgba(255,255,255,0.45)' }}
-                  >
-                    {stat.num}
-                  </p>
-                  <p className="text-slate-700 font-semibold text-[11px] md:text-sm leading-tight">{stat.label}</p>
+
+                  {total > 1 && (
+                    <div className="mt-5 flex items-center justify-center gap-4">
+                      <button
+                        type="button"
+                        onClick={goPrev}
+                        className="w-9 h-9 rounded-full flex items-center justify-center bg-white/80 border border-white/70 text-gray-700 hover:bg-white shadow-sm transition"
+                        aria-label={lang === 'ar' ? 'السابق' : 'Précédent'}
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <div className="flex items-center gap-2">
+                        {testimonialItems.map((_, dotIdx) => (
+                          <button
+                            key={dotIdx}
+                            type="button"
+                            onClick={() => setTestimonialIndex(dotIdx)}
+                            className={`h-2 rounded-full transition-all ${dotIdx === safeIndex ? 'w-6 bg-sky-600' : 'w-2 bg-gray-300 hover:bg-gray-400'}`}
+                            aria-label={`Témoignage ${dotIdx + 1}`}
+                          />
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={goNext}
+                        className="w-9 h-9 rounded-full flex items-center justify-center bg-white/80 border border-white/70 text-gray-700 hover:bg-white shadow-sm transition"
+                        aria-label={lang === 'ar' ? 'التالي' : 'Suivant'}
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            );
+          })()}
 
-          {/* Testimonials */}
-          {showTestimonialsSection && (
-            <div
-              className="rounded-[1.75rem] p-7 md:p-10 text-center"
-              style={{
-                background: 'rgba(255,255,255,0.78)',
-                backdropFilter: 'blur(20px)',
-                boxShadow: '0 20px 60px -10px rgba(30,80,140,0.10)',
-              }}
-            >
-              <h2 className="font-black text-2xl md:text-3xl text-gray-900 mb-2" style={{ fontFamily: 'Montserrat, sans-serif', color: theme.primary_color }}>
-                {pickLocalized(testimonialsSection.title_fr, testimonialsSection.title_ar, lang, lang === 'ar' ? 'آراء العملاء' : 'Témoignages')}
-              </h2>
-              <p className="text-gray-500 text-sm">
-                {pickLocalized(
-                  testimonialsSection.subtitle_fr,
-                  testimonialsSection.subtitle_ar,
-                  lang,
-                  lang === 'ar' ? 'نقوم بتحديث هذه المساحة باستمرار من لوحات الإدارة.' : 'Cette section est pilotée depuis le back-office.',
-                )}
-              </p>
-            </div>
-          )}
-
-          {/* Wholesale */}
+          {/* Wholesale CTA — homepage conversion block (separate from /wholesale page) */}
           {showWholesaleSection && (
             <div
               className="rounded-[1.75rem] overflow-hidden relative"
