@@ -10,6 +10,11 @@ import { HeroCarousel } from '../components/home/HeroCarousel';
 import { normalizeCategoriesStrip } from '../lib/categoriesStrip';
 import { CATEGORIES_UPDATED_EVENT, CATEGORIES_UPDATED_KEY, CONTENT_UPDATED_KEY } from '../lib/realtime';
 import { ProductCard, DiscoverMoreCard } from '../components/ProductCard';
+import {
+  CarouselAnimationConfig,
+  DEFAULT_PROMO_ANIMATION,
+  normalizeCarouselAnimation,
+} from '../lib/carouselAnimation';
 
 type SourceMode = 'manual' | 'products' | 'categories' | 'banners';
 
@@ -659,7 +664,13 @@ export function HomePage() {
 
         {/* ─── HERO (Carrousel publicitaire principal) ─── */}
         <section className="px-3 md:px-5 pt-4 pb-0 max-w-[1260px] mx-auto">
-          <HeroCarousel lang={lang} dir={dir} className="mb-0" />
+          <HeroCarousel
+            lang={lang}
+            dir={dir}
+            className="mb-0"
+            animation={(heroSection as any)?.hero_animation || null}
+            showOverlayGlobal={(heroSection as any)?.show_text_overlay_global !== false}
+          />
         </section>
         {/* Legacy static hero — used only as auto-fallback when admin has no active slides (wrapped below in conditional) */}
         {false && (
@@ -910,6 +921,7 @@ export function HomePage() {
                     fallbackTitle={promoTitle}
                     fallbackLink={promoLink}
                     onFallbackImage={promoVisual !== LOCAL_SCREEN_BG ? promoVisual : LOCAL_SCREEN_BG}
+                    animation={(promoSection as any)?.promo_animation || null}
                   />
                 </div>
               </div>
@@ -1297,22 +1309,68 @@ type PromoCarouselProps = {
   fallbackTitle: string;
   fallbackLink: string;
   onFallbackImage?: string;
+  animation?: Partial<CarouselAnimationConfig> | null;
 };
 
-function PromoCarousel({ images, lang, fallbackTitle, fallbackLink, onFallbackImage }: PromoCarouselProps) {
+const KEN_BURNS_SCALE: Record<string, number> = {
+  none: 1.0,
+  subtle: 1.04,
+  medium: 1.08,
+  strong: 1.15,
+};
+
+function usePrefersReducedMotion() {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReduce(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return reduce;
+}
+
+function PromoCarousel({ images, lang, fallbackTitle, fallbackLink, onFallbackImage, animation }: PromoCarouselProps) {
+  const cfg = useMemo(() => normalizeCarouselAnimation(animation, DEFAULT_PROMO_ANIMATION), [animation]);
+  const reduce = usePrefersReducedMotion();
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const touchStartX = React.useRef<number | null>(null);
+  const dirSign = React.useRef<1 | -1>(1);
 
   const count = images.length;
+  const effectiveReduce = reduce && cfg.respect_reduced_motion;
+  const transType = effectiveReduce ? 'fade' : cfg.transition_type;
+  const transDur = effectiveReduce ? 300 : cfg.transition_duration_ms;
+  const kenScale = KEN_BURNS_SCALE[cfg.ken_burns_intensity] ?? 1.0;
+  const isRtl = lang === 'ar';
 
   useEffect(() => {
-    if (count <= 1 || paused) return undefined;
+    if (count <= 1 || !cfg.autoplay) return undefined;
+    if (cfg.pause_on_hover && paused) return undefined;
     const t = window.setInterval(() => {
-      setIndex((prev) => (prev + 1) % count);
-    }, 5000);
+      setIndex((prev) => {
+        if (cfg.direction === 'forward') {
+          const next = prev + 1;
+          if (next >= count) return cfg.loop ? 0 : prev;
+          return next;
+        }
+        if (cfg.direction === 'reverse') {
+          const next = prev - 1;
+          if (next < 0) return cfg.loop ? count - 1 : prev;
+          return next;
+        }
+        // alternate
+        let next = prev + dirSign.current;
+        if (next >= count) { dirSign.current = -1; next = prev - 1; }
+        if (next < 0) { dirSign.current = 1; next = prev + 1; }
+        return Math.max(0, Math.min(count - 1, next));
+      });
+    }, cfg.slide_duration_ms);
     return () => window.clearInterval(t);
-  }, [count, paused]);
+  }, [count, paused, cfg.autoplay, cfg.pause_on_hover, cfg.slide_duration_ms, cfg.direction, cfg.loop]);
 
   // Clamp index if images shrink
   useEffect(() => {
@@ -1330,6 +1388,70 @@ function PromoCarousel({ images, lang, fallbackTitle, fallbackLink, onFallbackIm
       });
     }
     touchStartX.current = null;
+  };
+
+  const buildSlideStyle = (active: boolean): React.CSSProperties => {
+    const ease = 'cubic-bezier(0.4, 0, 0.2, 1)';
+    const dur = `${transDur}ms`;
+    if (transType === 'fade') {
+      return { opacity: active ? 1 : 0, transition: `opacity ${dur} ${ease}`, pointerEvents: active ? 'auto' : 'none' };
+    }
+    if (transType === 'slide-horizontal') {
+      const off = isRtl ? -100 : 100;
+      return {
+        opacity: active ? 1 : 0,
+        transform: active ? 'translateX(0)' : `translateX(${off}%)`,
+        transition: `opacity ${dur} ${ease}, transform ${dur} ${ease}`,
+        pointerEvents: active ? 'auto' : 'none',
+      };
+    }
+    if (transType === 'slide-vertical') {
+      return {
+        opacity: active ? 1 : 0,
+        transform: active ? 'translateY(0)' : 'translateY(100%)',
+        transition: `opacity ${dur} ${ease}, transform ${dur} ${ease}`,
+        pointerEvents: active ? 'auto' : 'none',
+      };
+    }
+    if (transType === 'zoom-in') {
+      return {
+        opacity: active ? 1 : 0,
+        transform: active ? 'scale(1)' : 'scale(0.8)',
+        transition: `opacity ${dur} ${ease}, transform ${dur} ${ease}`,
+        pointerEvents: active ? 'auto' : 'none',
+      };
+    }
+    if (transType === 'zoom-out') {
+      return {
+        opacity: active ? 1 : 0,
+        transform: active ? 'scale(1)' : 'scale(1.2)',
+        transition: `opacity ${dur} ${ease}, transform ${dur} ${ease}`,
+        pointerEvents: active ? 'auto' : 'none',
+      };
+    }
+    if (transType === 'ken-burns') {
+      return { opacity: active ? 1 : 0, transition: `opacity ${dur} ${ease}`, pointerEvents: active ? 'auto' : 'none' };
+    }
+    if (transType === 'flip') {
+      return {
+        opacity: active ? 1 : 0,
+        transform: active ? 'rotateY(0)' : 'rotateY(90deg)',
+        transformStyle: 'preserve-3d',
+        transition: `opacity ${dur} ${ease}, transform ${dur} ${ease}`,
+        pointerEvents: active ? 'auto' : 'none',
+      };
+    }
+    // none
+    return { opacity: active ? 1 : 0, pointerEvents: active ? 'auto' : 'none' };
+  };
+
+  const buildImgStyle = (active: boolean): React.CSSProperties => {
+    if (transType === 'ken-burns' && !effectiveReduce && active && kenScale > 1) {
+      return {
+        animation: `verking-promo-ken-burns ${Math.max(3000, cfg.slide_duration_ms)}ms ease-out forwards`,
+      };
+    }
+    return { transform: 'scale(1)' };
   };
 
   // Empty fallback: gradient + animated pulse
@@ -1392,36 +1514,46 @@ function PromoCarousel({ images, lang, fallbackTitle, fallbackLink, onFallbackIm
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       aria-roledescription="carousel"
+      style={transType === 'flip' ? { perspective: '1200px' } : undefined}
     >
-      {/* Slides layered absolutely — crossfade via opacity + ken-burns scale */}
+      <style>{`@keyframes verking-promo-ken-burns { from { transform: scale(1); } to { transform: scale(${kenScale}); } }`}</style>
+      {/* Slides layered absolutely — animation-driven transitions */}
       {images.map((img, i) => {
         const active = i === index;
         const titleForImg = (lang === 'ar' ? img.title_ar : img.title_fr) || (lang === 'ar' ? img.title_fr : img.title_ar) || fallbackTitle;
+        const url = img.image_url || '';
+        const isVideo = /\.(mp4|webm)(\?|$)/i.test(url);
         return (
           <Link
             key={img.id || i}
             to={img.link || fallbackLink}
             className="absolute inset-0"
-            style={{
-              opacity: active ? 1 : 0,
-              transition: 'opacity 1.2s ease',
-              pointerEvents: active ? 'auto' : 'none',
-            }}
+            style={buildSlideStyle(active)}
             aria-hidden={!active}
             tabIndex={active ? 0 : -1}
           >
-            <img
-              src={img.image_url}
-              onError={(e) => { if (onFallbackImage) e.currentTarget.src = onFallbackImage; }}
-              alt={titleForImg}
-              loading={i === 0 ? 'eager' : 'lazy'}
-              decoding="async"
-              className="absolute inset-0 h-full w-full object-cover"
-              style={{
-                transform: active ? 'scale(1.06)' : 'scale(1.0)',
-                transition: 'transform 8s ease-out',
-              }}
-            />
+            {isVideo ? (
+              <video
+                src={url}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload={i === 0 ? 'auto' : 'metadata'}
+                className="absolute inset-0 h-full w-full object-cover"
+                style={buildImgStyle(active)}
+              />
+            ) : (
+              <img
+                src={url}
+                onError={(e) => { if (onFallbackImage) e.currentTarget.src = onFallbackImage; }}
+                alt={titleForImg}
+                loading={i === 0 ? 'eager' : 'lazy'}
+                decoding="async"
+                className="absolute inset-0 h-full w-full object-cover"
+                style={buildImgStyle(active)}
+              />
+            )}
             {/* soft bottom overlay for legibility */}
             <div
               className="absolute inset-x-0 bottom-0 h-2/5"
@@ -1439,7 +1571,7 @@ function PromoCarousel({ images, lang, fallbackTitle, fallbackLink, onFallbackIm
       })}
 
       {/* Pagination dots */}
-      {count > 1 && (
+      {cfg.show_dots && count > 1 && (
         <div className="absolute z-20 left-1/2 -translate-x-1/2 bottom-3 flex items-center gap-1.5">
           {images.map((_, i) => (
             <button
@@ -1456,6 +1588,29 @@ function PromoCarousel({ images, lang, fallbackTitle, fallbackLink, onFallbackIm
             />
           ))}
         </div>
+      )}
+      {/* Optional arrows (admin-configurable per promo_animation.show_arrows) */}
+      {cfg.show_arrows && count > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setIndex((prev) => (prev - 1 + count) % count)}
+            aria-label={lang === 'ar' ? 'السابق' : 'Précédent'}
+            className="absolute z-20 top-1/2 -translate-y-1/2 start-3 h-10 w-10 rounded-full text-white flex items-center justify-center transition"
+            style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.18)' }}
+          >
+            <ChevronLeft size={18} className="rtl:rotate-180" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIndex((prev) => (prev + 1) % count)}
+            aria-label={lang === 'ar' ? 'التالي' : 'Suivant'}
+            className="absolute z-20 top-1/2 -translate-y-1/2 end-3 h-10 w-10 rounded-full text-white flex items-center justify-center transition"
+            style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.18)' }}
+          >
+            <ChevronRight size={18} className="rtl:rotate-180" />
+          </button>
+        </>
       )}
       {/* Hidden title/link for a11y (announces current slide) */}
       <span className="sr-only">{currentTitle}</span>

@@ -37,6 +37,12 @@ import {
   HeroOverlayMode,
 } from '../../lib/heroSlidesApi';
 import { subscribeRealtimeResources } from '../../lib/realtimeLiveSync';
+import {
+  CarouselAnimationConfig,
+  DEFAULT_HERO_ANIMATION,
+} from '../../lib/carouselAnimation';
+import { AnimationControlPanel } from './AnimationControlPanel';
+import { useLang } from '../../context/LanguageContext';
 
 // Max upload size mirrors the Supabase bucket cap (200 MB). Files bigger
 // than this are rejected client-side before we waste bandwidth converting
@@ -283,8 +289,21 @@ function MediaPreviewChip({
   );
 }
 
-export function HeroCarouselManager() {
+export interface HeroCarouselManagerProps {
+  heroAnimation?: Partial<CarouselAnimationConfig> | null;
+  onHeroAnimationChange?: (cfg: CarouselAnimationConfig) => void;
+  animationSavedAt?: number | null;
+  animationSavingState?: 'idle' | 'saving' | 'saved' | 'error';
+}
+
+export function HeroCarouselManager({
+  heroAnimation,
+  onHeroAnimationChange,
+  animationSavedAt,
+  animationSavingState,
+}: HeroCarouselManagerProps = {}) {
   const { token } = useAuth();
+  const { lang } = useLang();
   const [slides, setSlides] = useState<HeroSlide[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -446,6 +465,20 @@ export function HeroCarouselManager() {
           </button>
         </div>
       </motion.div>
+
+      {/* Animation settings panel (global for Hero) */}
+      {onHeroAnimationChange ? (
+        <AnimationControlPanel
+          value={heroAnimation || null}
+          defaults={DEFAULT_HERO_ANIMATION}
+          onChange={onHeroAnimationChange}
+          lang={lang}
+          title={lang === 'ar' ? 'إعدادات التحريك (كاروسيل البطل)' : 'Paramètres d\u2019animation (Hero)'}
+          debounceMs={800}
+          savedAt={animationSavedAt ?? null}
+          savingState={animationSavingState ?? 'idle'}
+        />
+      ) : null}
 
       {/* Slides list */}
       {loading ? (

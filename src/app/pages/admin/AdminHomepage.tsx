@@ -25,8 +25,14 @@ import {
   Star as StarIcon,
   GripVertical,
   AlertTriangle,
+  UploadCloud,
+  Loader2,
+  CheckCircle2,
+  Film,
+  Eye,
+  Link as LinkIcon,
 } from 'lucide-react';
-import { adminApi, api } from '../../lib/api';
+import { adminApi, api, API_BASE, apiHeaders } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useAdminUI } from '../../context/AdminUIContext';
 import { toast } from 'sonner';
@@ -38,6 +44,20 @@ import {
   normalizeUrlOrPath,
 } from '../../lib/textPipeline';
 import { validateHomepageConfig } from '../../lib/homepageValidator';
+import {
+  CarouselAnimationConfig,
+  DEFAULT_HERO_ANIMATION,
+  DEFAULT_PROMO_ANIMATION,
+  normalizeCarouselAnimation,
+} from '../../lib/carouselAnimation';
+import { AnimationControlPanel } from '../../components/admin/AnimationControlPanel';
+import { useLang } from '../../context/LanguageContext';
+import {
+  SPLASH_TEMPLATES,
+  SPLASH_THEME_FILTERS,
+  SplashTemplate,
+  SplashThemeFilter,
+} from '../../data/splashTemplates';
 
 type PreviewDevice = 'desktop' | 'mobile';
 type SourceMode = 'manual' | 'products' | 'categories' | 'banners';
@@ -108,6 +128,8 @@ type HomepageSection = {
   trust_items?: TrustItem[];
   testimonial_items?: TestimonialItem[];
   promo_images?: PromoImage[];
+  hero_animation?: CarouselAnimationConfig;
+  promo_animation?: CarouselAnimationConfig;
 };
 
 const TRUST_ICON_OPTIONS: Array<{ value: string; label: string }> = [
@@ -315,6 +337,7 @@ const DEFAULT_CONFIG: HomepageConfig = {
     cta_ar: 'اكتشف',
     cta_link: '/shop',
     style_variant: 'hero',
+    hero_animation: DEFAULT_HERO_ANIMATION,
   },
   categories: {
     ...DEFAULT_SECTION,
@@ -363,6 +386,7 @@ const DEFAULT_CONFIG: HomepageConfig = {
     source_ref: 'promotion_strip',
     style_variant: 'banner',
     promo_images: DEFAULT_PROMO_IMAGES,
+    promo_animation: DEFAULT_PROMO_ANIMATION,
   },
   trust: {
     ...DEFAULT_SECTION,
@@ -495,6 +519,18 @@ function normalizeSection(value: any, fallback: HomepageSection): HomepageSectio
   if (Array.isArray(fallback.promo_images) || Array.isArray(merged.promo_images)) {
     base.promo_images = normalizePromoImages(merged.promo_images, fallback.promo_images || DEFAULT_PROMO_IMAGES);
   }
+  if (fallback.hero_animation || merged.hero_animation) {
+    base.hero_animation = normalizeCarouselAnimation(
+      merged.hero_animation,
+      fallback.hero_animation || DEFAULT_HERO_ANIMATION,
+    );
+  }
+  if (fallback.promo_animation || merged.promo_animation) {
+    base.promo_animation = normalizeCarouselAnimation(
+      merged.promo_animation,
+      fallback.promo_animation || DEFAULT_PROMO_ANIMATION,
+    );
+  }
   return base;
 }
 
@@ -540,6 +576,7 @@ function readSyncState() {
 export function AdminHomepage() {
   const { token } = useAuth();
   const { t } = useAdminUI();
+  const { lang } = useLang();
 
   const [loading, setLoading] = useState(true);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -557,6 +594,10 @@ export function AdminHomepage() {
   const [draftConfig, setDraftConfig] = useState<HomepageConfig>(DEFAULT_CONFIG);
   const [lastDraftAt, setLastDraftAt] = useState<string | null>(null);
   const [lastPublishedAt, setLastPublishedAt] = useState<string | null>(null);
+  const [heroAnimSavingState, setHeroAnimSavingState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [heroAnimSavedAt, setHeroAnimSavedAt] = useState<number | null>(null);
+  const [promoAnimSavingState, setPromoAnimSavingState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [promoAnimSavedAt, setPromoAnimSavedAt] = useState<number | null>(null);
 
   const loadData = async () => {
     if (!token) return;
@@ -629,6 +670,70 @@ export function AdminHomepage() {
       ...prev,
       [sectionKey]: normalizeSection({ ...prev[sectionKey], ...patch }, prev[sectionKey]),
     }));
+  };
+
+  // Auto-persist a single section's config to the server without going through
+  // the full Publier pipeline (no validator gating). This powers the
+  // debounced animation panels for Hero & Promo, so Amélioration 2 (animation
+  // controls) lands immediately in homepage_sections.config without waiting
+  // for the admin to click Publier.
+  const persistSectionPartial = async (sectionKey: SectionKey, patch: Partial<HomepageSection>) => {
+    if (!token) return;
+    try {
+      const next = normalizeHomepageConfig({
+        ...draftConfig,
+        [sectionKey]: { ...draftConfig[sectionKey], ...patch },
+      });
+      await adminApi.put('/homepage-config', next, token);
+      setRemoteConfig(next);
+      const timestamp = new Date().toISOString();
+      setLastPublishedAt(timestamp);
+      persistSyncState(lastDraftAt, timestamp);
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  };
+
+  const handleHeroAnimationChange = async (cfg: CarouselAnimationConfig) => {
+    updateSection('hero', { hero_animation: cfg });
+    setHeroAnimSavingState('saving');
+    try {
+      await persistSectionPartial('hero', { hero_animation: cfg });
+      setHeroAnimSavingState('saved');
+      setHeroAnimSavedAt(Date.now());
+    } catch {
+      setHeroAnimSavingState('error');
+    }
+  };
+
+  // ─── Priority 5 · Hero overlay master toggle ─────────────────────────────
+  const [heroOverlaySavingState, setHeroOverlaySavingState] =
+    useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [heroOverlaySavedAt, setHeroOverlaySavedAt] = useState<number | null>(null);
+  const heroOverlayGlobal = (draftConfig.hero as any)?.show_text_overlay_global !== false;
+  const handleHeroOverlayGlobalToggle = async (next: boolean) => {
+    updateSection('hero', { show_text_overlay_global: next } as any);
+    setHeroOverlaySavingState('saving');
+    try {
+      await persistSectionPartial('hero', { show_text_overlay_global: next } as any);
+      setHeroOverlaySavingState('saved');
+      setHeroOverlaySavedAt(Date.now());
+    } catch {
+      setHeroOverlaySavingState('error');
+    }
+  };
+
+  const handlePromoAnimationChange = async (cfg: CarouselAnimationConfig) => {
+    updateSection('promotions', { promo_animation: cfg });
+    setPromoAnimSavingState('saving');
+    try {
+      await persistSectionPartial('promotions', { promo_animation: cfg });
+      setPromoAnimSavingState('saved');
+      setPromoAnimSavedAt(Date.now());
+    } catch {
+      setPromoAnimSavingState('error');
+    }
   };
 
   const updateOrder = (sectionKey: SectionKey, direction: 'up' | 'down') => {
@@ -834,78 +939,160 @@ export function AdminHomepage() {
           )}
         </div>
       )}
-      {/* ─── Gestionnaire du Hero Carousel (Carrousel publicitaire principal) ─── */}
-      <HeroCarouselManager />
-
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className={`text-3xl font-black ${t.text}`}>Page d’accueil</h1>
-          <p className={`mt-1 text-sm ${t.textMuted}`}>
-            Homepage builder bilingue: sections, source mode, ordre merchandising et preview live.
-          </p>
-          {statusLine && <p className={`mt-1 text-xs ${t.textMuted}`}>{statusLine}</p>}
+      {/* ─── Priority 5 · Master overlay switch (show/hide the hero text card globally) ─── */}
+      <div
+        dir={lang === 'ar' ? 'rtl' : 'ltr'}
+        className="relative overflow-hidden rounded-2xl border border-sky-200/60 bg-gradient-to-br from-white via-sky-50/70 to-indigo-50/50 p-5 shadow-[0_10px_30px_-20px_rgba(30,64,175,0.35)]"
+      >
+        <div className="pointer-events-none absolute -top-16 -end-16 h-40 w-40 rounded-full bg-gradient-to-br from-sky-200/70 to-transparent blur-3xl" aria-hidden />
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className={`inline-flex h-11 w-11 items-center justify-center rounded-xl ${heroOverlayGlobal ? 'bg-gradient-to-br from-sky-500 to-indigo-500 text-white shadow-md' : 'bg-gray-200 text-gray-500'}`}>
+              <Eye size={20} />
+            </span>
+            <div className="min-w-0">
+              <h3 className="text-base font-black text-gray-900 leading-tight">
+                {lang === 'ar' ? 'بطاقة العنوان فوق الفيديو' : 'Carte de titre sur la vidéo'}
+              </h3>
+              <p className="mt-0.5 text-xs text-gray-600 leading-snug max-w-xl">
+                {lang === 'ar'
+                  ? 'شغّل أو أطفئ نافذة "Nouvelle Collection" البيضاء التي تظهر فوق الفيديو/الصورة. عند الإطفاء، يُعرض الوسيط بكامل شاشة البطل دون أي نص.'
+                  : 'Activez ou désactivez la carte blanche "Nouvelle Collection" qui s’affiche au-dessus de la vidéo/image. Quand elle est désactivée, le média occupe tout le hero sans aucun texte superposé.'}
+              </p>
+              {heroOverlaySavingState !== 'idle' && (
+                <p className="mt-1 text-[11px] font-semibold text-sky-700">
+                  {heroOverlaySavingState === 'saving' && (lang === 'ar' ? 'جارٍ الحفظ…' : 'Sauvegarde…')}
+                  {heroOverlaySavingState === 'saved' && (lang === 'ar' ? '✓ تم الحفظ' : '✓ Enregistré')}
+                  {heroOverlaySavingState === 'error' && (lang === 'ar' ? 'خطأ في الحفظ' : 'Erreur de sauvegarde')}
+                  {heroOverlaySavedAt && heroOverlaySavingState === 'saved' && (
+                    <span className="ms-2 opacity-60">
+                      {new Date(heroOverlaySavedAt).toLocaleTimeString(lang === 'ar' ? 'ar-DZ' : 'fr-DZ', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <span className={`text-xs font-bold ${heroOverlayGlobal ? 'text-emerald-700' : 'text-gray-400'}`}>
+              {heroOverlayGlobal
+                ? (lang === 'ar' ? 'مُفعَّلة' : 'Activée')
+                : (lang === 'ar' ? 'مُعطَّلة' : 'Désactivée')}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={heroOverlayGlobal}
+              aria-label={lang === 'ar' ? 'زر تشغيل/إطفاء بطاقة العنوان' : 'Interrupteur carte de titre'}
+              onClick={() => handleHeroOverlayGlobalToggle(!heroOverlayGlobal)}
+              className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 ${heroOverlayGlobal ? 'bg-gradient-to-r from-sky-500 to-indigo-500' : 'bg-gray-300'}`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform duration-200 ${heroOverlayGlobal ? 'translate-x-7 rtl:-translate-x-7' : 'translate-x-1 rtl:-translate-x-1'}`}
+              />
+            </button>
+          </div>
         </div>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={saveDraft}
-            disabled={savingDraft}
-            className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
-          >
-            <Save size={14} />
-            {savingDraft ? 'Sauvegarde...' : 'Save'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setPreviewDevice('desktop')}
-            className={`inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-xs font-bold ${
-              previewDevice === 'desktop'
-                ? 'border-blue-300 bg-blue-50 text-blue-700'
-                : 'border-gray-200 text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <Monitor size={14} />
-            Preview desktop
-          </button>
-          <button
-            type="button"
-            onClick={() => setPreviewDevice('mobile')}
-            className={`inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-xs font-bold ${
-              previewDevice === 'mobile'
-                ? 'border-blue-300 bg-blue-50 text-blue-700'
-                : 'border-gray-200 text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <Smartphone size={14} />
-            Preview mobile
-          </button>
-          <button
-            type="button"
-            onClick={publish}
-            disabled={publishing}
-            className="inline-flex items-center gap-1 rounded-xl bg-[#1A3C6E] px-3 py-2 text-xs font-black text-white disabled:opacity-60"
-          >
-            <Send size={14} />
-            {publishing ? 'Publication...' : 'Publish'}
-          </button>
-          <button
-            type="button"
-            onClick={resetExpandedSection}
-            disabled={!expandedKey}
-            className="inline-flex items-center gap-1 rounded-xl border border-orange-200 px-3 py-2 text-xs font-bold text-orange-700 hover:bg-orange-50"
-          >
-            <RotateCcw size={14} />
-            Reset section
-          </button>
-          <button
-            type="button"
-            onClick={clearSyncState}
-            className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-100"
-          >
-            <RefreshCw size={14} />
-            Clear sync state
-          </button>
+      {/* ─── Gestionnaire du Hero Carousel (Carrousel publicitaire principal) ─── */}
+      <HeroCarouselManager
+        heroAnimation={draftConfig.hero?.hero_animation || DEFAULT_HERO_ANIMATION}
+        onHeroAnimationChange={handleHeroAnimationChange}
+        animationSavedAt={heroAnimSavedAt}
+        animationSavingState={heroAnimSavingState}
+      />
+
+      {/* ─── Priority 6 · Sticky action bar ─── */}
+      <div className="sticky top-0 z-40 -mx-2 md:-mx-4 rounded-2xl border border-slate-200 bg-white/90 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/75">
+        <div className="flex flex-col gap-3 px-4 py-3 md:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
+          <div className="min-w-0 shrink">
+            <h1 className={`text-xl md:text-2xl font-black leading-tight ${t.text}`}>Page d’accueil</h1>
+            <p className={`mt-0.5 text-xs ${t.textMuted} leading-snug truncate`}>
+              Homepage builder bilingue — sections, source mode, ordre merchandising & preview live.
+            </p>
+            {statusLine && <p className={`mt-0.5 text-[11px] font-semibold text-slate-500 truncate`}>{statusLine}</p>}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:flex-nowrap">
+            {/* Save — secondary outline slate */}
+            <button
+              type="button"
+              onClick={saveDraft}
+              disabled={savingDraft}
+              title="Save"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:border-slate-400 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Save size={14} />
+              <span className="hidden md:inline">{savingDraft ? 'Sauvegarde...' : 'Save'}</span>
+            </button>
+
+            {/* Preview desktop — neutral */}
+            <button
+              type="button"
+              onClick={() => setPreviewDevice('desktop')}
+              title="Preview desktop"
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition ${
+                previewDevice === 'desktop'
+                  ? 'border-sky-300 bg-sky-50 text-sky-700 shadow-sm'
+                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Monitor size={14} />
+              <span className="hidden md:inline">Desktop</span>
+            </button>
+
+            {/* Preview mobile — neutral */}
+            <button
+              type="button"
+              onClick={() => setPreviewDevice('mobile')}
+              title="Preview mobile"
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition ${
+                previewDevice === 'mobile'
+                  ? 'border-sky-300 bg-sky-50 text-sky-700 shadow-sm'
+                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Smartphone size={14} />
+              <span className="hidden md:inline">Mobile</span>
+            </button>
+
+            {/* Publish — primary coral (most visible) */}
+            <button
+              type="button"
+              onClick={publish}
+              disabled={publishing}
+              title="Publish"
+              className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black text-white shadow-lg shadow-orange-500/30 transition hover:brightness-110 hover:shadow-orange-500/40 disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{ background: 'linear-gradient(135deg, #FF6B35 0%, #FF8C5A 100%)' }}
+            >
+              <Send size={14} />
+              {publishing ? 'Publication...' : 'Publish'}
+            </button>
+
+            {/* Reset section — warning outline orange */}
+            <button
+              type="button"
+              onClick={resetExpandedSection}
+              disabled={!expandedKey}
+              title="Reset section"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-orange-300 bg-orange-50/60 px-3 py-2 text-xs font-bold text-orange-700 transition hover:bg-orange-100/80 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <RotateCcw size={14} />
+              <span className="hidden md:inline">Reset</span>
+            </button>
+
+            {/* Clear cache — ghost discret */}
+            <button
+              type="button"
+              onClick={clearSyncState}
+              title="Clear cache"
+              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+            >
+              <RefreshCw size={14} />
+              <span className="hidden md:inline">Clear</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1216,10 +1403,23 @@ export function AdminHomepage() {
                     )}
 
                     {sectionKey === 'promotions' && (
-                      <PromoImagesEditor
-                        items={section.promo_images || []}
-                        onChange={(nextItems) => updateSection(sectionKey, { promo_images: nextItems })}
-                      />
+                      <>
+                        <AnimationControlPanel
+                          value={section.promo_animation || null}
+                          defaults={DEFAULT_PROMO_ANIMATION}
+                          onChange={handlePromoAnimationChange}
+                          lang={lang}
+                          title={lang === 'ar' ? 'إعدادات التحريك (عروض)' : 'Paramètres d\u2019animation (Promos)'}
+                          debounceMs={800}
+                          hideArrows
+                          savedAt={promoAnimSavedAt}
+                          savingState={promoAnimSavingState}
+                        />
+                        <PromoImagesEditor
+                          items={section.promo_images || []}
+                          onChange={(nextItems) => updateSection(sectionKey, { promo_images: nextItems })}
+                        />
+                      </>
                     )}
                   </div>
                 )}
@@ -1673,6 +1873,500 @@ function TestimonialItemsEditor({
   );
 }
 
+// ─── Priority 3: Native upload for PromoImagesEditor ───────────────
+// Upload constraints (client-side validated before base64 encode)
+const PROMO_IMAGE_MAX_BYTES = 5 * 1024 * 1024;   // 5 MB
+const PROMO_VIDEO_MAX_BYTES = 20 * 1024 * 1024;  // 20 MB
+const PROMO_IMAGE_MIME = /^image\/(jpeg|jpg|png|webp)$/i;
+const PROMO_VIDEO_MIME = /^video\/(mp4|webm)$/i;
+const PROMO_IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
+const PROMO_VIDEO_EXT = /\.(mp4|webm)$/i;
+
+function isVideoUrl(url: string): boolean {
+  if (!url) return false;
+  const u = url.toLowerCase().split('?')[0];
+  return /\.(mp4|webm)$/.test(u);
+}
+
+function slugifyFilename(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9.]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60) || 'file';
+}
+
+async function uploadPromoMedia(
+  file: File,
+  token: string,
+  onProgress: (pct: number) => void,
+): Promise<{ url: string; filename: string }> {
+  const isImg = PROMO_IMAGE_MIME.test(file.type) || PROMO_IMAGE_EXT.test(file.name);
+  const isVid = PROMO_VIDEO_MIME.test(file.type) || PROMO_VIDEO_EXT.test(file.name);
+  if (!isImg && !isVid) {
+    throw new Error('unsupported_type');
+  }
+  if (isImg && file.size > PROMO_IMAGE_MAX_BYTES) throw new Error('image_too_large');
+  if (isVid && file.size > PROMO_VIDEO_MAX_BYTES) throw new Error('video_too_large');
+
+  // Read file as data URL with progress reporting
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('file_read_failed'));
+    reader.onprogress = (evt) => {
+      if (evt.lengthComputable) {
+        const pct = Math.round((evt.loaded / evt.total) * 70); // reading=0→70%
+        onProgress(Math.max(1, pct));
+      }
+    };
+    reader.onload = (evt) => {
+      onProgress(70);
+      resolve(String(evt.target?.result || ''));
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Build a stable filename: promo/{timestamp}-{slug}.{ext}
+  const ts = Date.now().toString(36);
+  const safeName = slugifyFilename(file.name);
+  const storageFilename = `promo/${ts}-${safeName}`;
+  onProgress(78);
+
+  const res = await fetch(`${API_BASE}/media/upload`, {
+    method: 'POST',
+    headers: apiHeaders(token),
+    body: JSON.stringify({
+      filename: storageFilename,
+      content_type: file.type || (isImg ? 'image/jpeg' : 'video/mp4'),
+      data: dataUrl,
+      size: file.size,
+    }),
+  });
+  onProgress(92);
+
+  if (!res.ok) {
+    const msg = await res.text().catch(() => '');
+    throw new Error(`upload_failed:${res.status}:${msg.slice(0, 120)}`);
+  }
+  const json = await res.json().catch(() => ({} as any));
+  const url = json?.media?.url || json?.url;
+  if (!url) throw new Error('upload_no_url');
+  onProgress(100);
+  return { url, filename: json?.media?.filename || storageFilename };
+}
+
+function humanizePromoUploadError(code: string, lang: 'fr' | 'ar'): string {
+  const isAr = lang === 'ar';
+  if (code === 'unsupported_type') {
+    return isAr
+      ? 'نوع الملف غير مدعوم. الصور: JPG/PNG/WebP — الفيديوهات: MP4/WebM.'
+      : 'Type non supporté. Images: JPG/PNG/WebP — Vidéos: MP4/WebM.';
+  }
+  if (code === 'image_too_large') {
+    return isAr ? 'الصورة أكبر من 5 ميغابايت.' : 'Image > 5 Mo.';
+  }
+  if (code === 'video_too_large') {
+    return isAr ? 'الفيديو أكبر من 20 ميغابايت.' : 'Vidéo > 20 Mo.';
+  }
+  if (code === 'file_read_failed') {
+    return isAr ? 'تعذّر قراءة الملف.' : 'Lecture du fichier impossible.';
+  }
+  if (code.startsWith('upload_failed')) {
+    return isAr ? 'فشل الرفع — حاول مرة أخرى.' : 'Échec du téléversement — réessayez.';
+  }
+  if (code === 'upload_no_url') {
+    return isAr ? 'لم يرجع الخادم رابطًا عموميًا.' : "Le serveur n'a pas retourné d'URL publique.";
+  }
+  return isAr ? 'حدث خطأ غير متوقع.' : 'Erreur inattendue.';
+}
+
+type PromoItemRowProps = {
+  item: PromoImage;
+  index: number;
+  total: number;
+  lang: 'fr' | 'ar';
+  onChange: (patch: Partial<PromoImage>) => void;
+  onRemove: () => void;
+  onMove: (delta: -1 | 1) => void;
+};
+
+function PromoItemRow({ item, index, total, lang, onChange, onRemove, onMove }: PromoItemRowProps) {
+  const { token } = useAuth();
+  const [uploadPct, setUploadPct] = useState<number>(0);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [justUploaded, setJustUploaded] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const isAr = lang === 'ar';
+  const isVideo = isVideoUrl(item.image_url);
+
+  const handleUpload = async (file: File | null) => {
+    if (!file || !token) {
+      if (!token) toast.error(isAr ? 'جلسة غير صالحة — أعد تسجيل الدخول.' : 'Session expirée — reconnectez-vous.');
+      return;
+    }
+    setUploading(true);
+    setUploadPct(1);
+    setJustUploaded(false);
+    const loadingToast = toast.loading(isAr ? 'جاري رفع الملف…' : 'Téléversement en cours…');
+    try {
+      const { url } = await uploadPromoMedia(file, token, setUploadPct);
+      onChange({ image_url: url });
+      toast.success(isAr ? 'تم الرفع بنجاح ✓' : 'Téléversement réussi ✓', { id: loadingToast });
+      setJustUploaded(true);
+      setTimeout(() => setJustUploaded(false), 2400);
+    } catch (err: any) {
+      const code = (err?.message || '').split(':')[0];
+      toast.error(humanizePromoUploadError(code, lang), { id: loadingToast });
+    } finally {
+      setUploading(false);
+      setTimeout(() => setUploadPct(0), 600);
+    }
+  };
+
+  const onFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    e.target.value = '';
+    handleUpload(file);
+  };
+
+  const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (uploading) return;
+    const file = e.dataTransfer.files?.[0] || null;
+    handleUpload(file);
+  };
+
+  return (
+    <div className="space-y-2 rounded-xl border border-orange-100 bg-white p-3">
+      {/* Row header */}
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-black uppercase tracking-wide text-gray-500">
+          #{index + 1}{isVideo ? ' · Vidéo' : ''}
+        </p>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onMove(-1)}
+            disabled={index === 0}
+            className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+            title={isAr ? 'إلى الأعلى' : 'Monter'}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            onClick={() => onMove(1)}
+            disabled={index === total - 1}
+            className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+            title={isAr ? 'إلى الأسفل' : 'Descendre'}
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="rounded-lg p-1 text-red-500 hover:bg-red-50"
+            title={isAr ? 'حذف' : 'Supprimer'}
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+
+      {/* Drop zone + preview */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); if (!uploading) setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+        className={`relative overflow-hidden rounded-xl border-2 border-dashed transition-colors ${
+          dragOver
+            ? 'border-orange-500 bg-orange-50'
+            : item.image_url
+              ? 'border-orange-100 bg-white'
+              : 'border-orange-200 bg-orange-50/60 hover:bg-orange-50'
+        }`}
+        style={{ minHeight: item.image_url ? undefined : 140 }}
+      >
+        {item.image_url ? (
+          isVideo ? (
+            <video
+              src={item.image_url}
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="h-40 w-full object-cover"
+            />
+          ) : (
+            <img src={item.image_url} alt={item.title_fr || 'promo'} className="h-40 w-full object-cover" />
+          )
+        ) : (
+          <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 p-4 text-center">
+            <UploadCloud size={24} className="text-orange-500" />
+            <p className="text-xs font-bold text-gray-700">
+              {isAr ? 'اسحب وأسقط ملفًا هنا' : 'Glissez-déposez un fichier ici'}
+            </p>
+            <p className="text-[10px] text-gray-500">
+              {isAr
+                ? 'صور JPG/PNG/WebP (≤5 ميغا) · فيديو MP4/WebM (≤20 ميغا)'
+                : 'Images JPG/PNG/WebP (≤5 Mo) · Vidéos MP4/WebM (≤20 Mo)'}
+            </p>
+          </div>
+        )}
+
+        {/* Progress overlay */}
+        {uploading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/85 backdrop-blur-sm">
+            <Loader2 size={20} className="animate-spin text-orange-500" />
+            <div className="h-1.5 w-3/4 overflow-hidden rounded-full bg-orange-100">
+              <div
+                className="h-full bg-orange-500 transition-all duration-200"
+                style={{ width: `${uploadPct}%` }}
+              />
+            </div>
+            <p className="text-[11px] font-bold text-orange-700">{uploadPct}%</p>
+          </div>
+        )}
+
+        {/* Success flash */}
+        {justUploaded && !uploading && (
+          <div className="absolute end-2 top-2 flex items-center gap-1 rounded-full bg-green-500 px-2 py-1 text-[10px] font-black text-white shadow">
+            <CheckCircle2 size={11} /> OK
+          </div>
+        )}
+      </div>
+
+      {/* Upload actions */}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/jpg,image/png,image/webp,video/mp4,video/webm"
+          onChange={onFilePicked}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white shadow hover:bg-orange-600 disabled:opacity-50"
+        >
+          <UploadCloud size={12} />
+          {isAr
+            ? (item.image_url ? 'استبدال' : 'من جهازي')
+            : (item.image_url ? 'Remplacer' : 'Depuis mes appareils')}
+        </button>
+        {item.image_url && (
+          <a
+            href={item.image_url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 rounded-lg border border-orange-200 px-3 py-1.5 text-[11px] font-bold text-orange-600 hover:bg-orange-50"
+          >
+            <Eye size={11} />
+            {isAr ? 'معاينة' : 'Aperçu'}
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          className="ms-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold text-gray-500 hover:bg-gray-100"
+        >
+          <LinkIcon size={10} />
+          {isAr
+            ? (showAdvanced ? 'إخفاء الرابط' : 'لصق رابط (متقدم)')
+            : (showAdvanced ? 'Masquer URL' : 'Coller URL (avancé)')}
+        </button>
+      </div>
+
+      {/* Advanced URL input */}
+      {showAdvanced && (
+        <LabeledInput
+          label={isAr ? 'رابط الصورة/الفيديو' : 'URL image/vidéo'}
+          value={item.image_url}
+          onChange={(value) => onChange({ image_url: normalizeSafeText(value, '') })}
+          placeholder="https://..."
+        />
+      )}
+
+      {/* Title fields (bilingual) */}
+      <div className="grid gap-2 md:grid-cols-2">
+        <LabeledInput
+          label={isAr ? 'العنوان FR' : 'Titre FR'}
+          value={item.title_fr}
+          onChange={(value) => onChange({ title_fr: normalizeSafeText(value, '') })}
+          placeholder="Pack rentrée scolaire"
+        />
+        <LabeledInput
+          label={isAr ? 'العنوان AR' : 'Titre AR'}
+          value={item.title_ar}
+          onChange={(value) => onChange({ title_ar: normalizeSafeText(value, '') })}
+          dir="rtl"
+          placeholder="حزمة الدخول المدرسي"
+        />
+      </div>
+
+      {/* Link */}
+      <LabeledInput
+        label={isAr ? 'الرابط (اختياري)' : 'Lien (optionnel)'}
+        value={item.link}
+        onChange={(value) => onChange({ link: normalizeUrlOrPath(value, '') })}
+        placeholder="/shop?promo=true"
+      />
+    </div>
+  );
+}
+
+// ─── Priority 4: Splash templates gallery ───────────────────────
+type SplashGalleryModalProps = {
+  open: boolean;
+  lang: 'fr' | 'ar';
+  onClose: () => void;
+  onSelect: (template: SplashTemplate) => void;
+};
+
+function SplashGalleryModal({ open, lang, onClose, onSelect }: SplashGalleryModalProps) {
+  const [filter, setFilter] = useState<SplashThemeFilter>('all');
+  const isAr = lang === 'ar';
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const visible = filter === 'all'
+    ? SPLASH_TEMPLATES
+    : SPLASH_TEMPLATES.filter((t) => t.theme === filter);
+
+  return (
+    <div
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={isAr ? 'معرض القوالب الترويجية' : 'Galerie de modèles promo'}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        dir={isAr ? 'rtl' : 'ltr'}
+        className="relative w-full max-w-5xl max-h-[88vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <div>
+            <h3 className="text-lg font-black text-slate-900">
+              {isAr ? 'معرض القوالب الترويجية' : 'Galerie de modèles'}
+            </h3>
+            <p className="text-xs text-slate-500">
+              {isAr
+                ? 'اختر قالبًا لإضافته تلقائيًا مع العنوان والصورة.'
+                : 'Cliquez pour insérer automatiquement (image + titre bilingue).'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-slate-500 hover:bg-slate-100"
+            aria-label={isAr ? 'إغلاق' : 'Fermer'}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Theme filters */}
+        <div className="flex flex-wrap gap-2 border-b border-slate-100 px-5 py-3 bg-slate-50/60">
+          {SPLASH_THEME_FILTERS.map((f) => {
+            const active = filter === f.key;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setFilter(f.key)}
+                className={`rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wide transition ${
+                  active
+                    ? 'bg-orange-500 text-white shadow'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {isAr ? f.label_ar : f.label_fr}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Grid */}
+        <div className="overflow-y-auto p-5">
+          {visible.length === 0 ? (
+            <p className="text-center text-sm text-slate-500 py-12">
+              {isAr ? 'لا توجد قوالب لهذا الفلتر.' : 'Aucun modèle pour ce filtre.'}
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {visible.map((t) => (
+                <div
+                  key={t.id}
+                  className="group flex flex-col rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all"
+                >
+                  <div className="aspect-[3/1] overflow-hidden bg-slate-100">
+                    <img
+                      src={t.file}
+                      alt={isAr ? t.title_ar : t.title_fr}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
+                    />
+                  </div>
+                  <div className="flex-1 flex flex-col gap-1.5 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-black text-slate-900 leading-tight line-clamp-1">
+                        {isAr ? t.title_ar : t.title_fr}
+                      </p>
+                      {t.badge && (
+                        <span
+                          className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black text-white"
+                          style={{ background: t.accent_color }}
+                        >
+                          {t.badge}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 line-clamp-1">
+                      {isAr ? t.subtitle_ar : t.subtitle_fr}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => onSelect(t)}
+                      className="mt-2 inline-flex items-center justify-center gap-1 rounded-lg bg-orange-500 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-white hover:bg-orange-600 transition"
+                    >
+                      <CheckCircle2 size={12} />
+                      {isAr ? 'اختيار' : 'Sélectionner'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-slate-100 px-5 py-3 bg-slate-50/60 text-[11px] text-slate-500">
+          {isAr
+            ? `${visible.length} قالب${visible.length === 1 ? '' : ' '} · 1200×400 JPG`
+            : `${visible.length} modèle${visible.length === 1 ? '' : 's'} disponible${visible.length === 1 ? '' : 's'} · 1200×400 JPG`}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PromoImagesEditor({
   items,
   onChange,
@@ -1680,6 +2374,10 @@ function PromoImagesEditor({
   items: PromoImage[];
   onChange: (items: PromoImage[]) => void;
 }) {
+  const { lang } = useLang();
+  const isAr = lang === 'ar';
+  const [galleryOpen, setGalleryOpen] = useState(false);
+
   const updateItem = (index: number, patch: Partial<PromoImage>) => {
     const next = items.map((item, i) => (i === index ? { ...item, ...patch } : item));
     onChange(next);
@@ -1689,7 +2387,7 @@ function PromoImagesEditor({
   };
   const addItem = () => {
     if (items.length >= 12) {
-      toast.error('Maximum 12 images promo.');
+      toast.error(isAr ? 'الحد الأقصى 12 صورة ترويجية.' : 'Maximum 12 images promo.');
       return;
     }
     onChange([
@@ -1703,6 +2401,24 @@ function PromoImagesEditor({
       },
     ]);
   };
+  const handleSelectTemplate = (t: SplashTemplate) => {
+    if (items.length >= 12) {
+      toast.error(isAr ? 'الحد الأقصى 12 صورة ترويجية.' : 'Maximum 12 images promo.');
+      return;
+    }
+    onChange([
+      ...items,
+      {
+        id: `promo-img-${Date.now().toString(36)}`,
+        image_url: t.file,
+        title_fr: t.title_fr,
+        title_ar: t.title_ar,
+        link: t.suggested_link || '/shop?promo=true',
+      },
+    ]);
+    setGalleryOpen(false);
+    toast.success(isAr ? `تمت إضافة: ${t.title_ar}` : `Ajouté : ${t.title_fr}`);
+  };
   const moveItem = (from: number, to: number) => {
     if (to < 0 || to >= items.length) return;
     const next = [...items];
@@ -1710,89 +2426,57 @@ function PromoImagesEditor({
     next.splice(to, 0, moved);
     onChange(next);
   };
+
   return (
     <div className="space-y-3 rounded-2xl border border-orange-200 bg-orange-50/40 p-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-black uppercase tracking-wide text-orange-700">Images carousel promo ({items.length})</p>
-        <button
-          type="button"
-          onClick={addItem}
-          className="inline-flex items-center gap-1 rounded-xl bg-orange-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-orange-600"
-        >
-          <Plus size={12} />
-          Ajouter
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-black uppercase tracking-wide text-orange-700">
+          {isAr ? `صور الكاروسيل الترويجي (${items.length})` : `Images carousel promo (${items.length})`}
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setGalleryOpen(true)}
+            className="inline-flex items-center gap-1 rounded-xl border border-orange-300 bg-white px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-50"
+          >
+            <ImageIcon size={12} />
+            {isAr ? 'القوالب' : 'Modèles'}
+          </button>
+          <button
+            type="button"
+            onClick={addItem}
+            className="inline-flex items-center gap-1 rounded-xl bg-orange-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-orange-600"
+          >
+            <Plus size={12} />
+            {isAr ? 'إضافة' : 'Ajouter'}
+          </button>
+        </div>
       </div>
       {items.length === 0 && (
-        <p className="text-xs text-gray-500">Aucune image. Cliquez sur Ajouter pour en creer une.</p>
+        <p className="text-xs text-gray-500">
+          {isAr
+            ? 'لا توجد صور بعد. انقر على "إضافة" لإنشاء واحدة.'
+            : 'Aucune image. Cliquez sur Ajouter pour en créer une.'}
+        </p>
       )}
       {items.map((item, index) => (
-        <div key={item.id || index} className="space-y-2 rounded-xl border border-orange-100 bg-white p-3">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-black uppercase tracking-wide text-gray-500">#{index + 1}</p>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => moveItem(index, index - 1)}
-                disabled={index === 0}
-                className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
-                title="Monter"
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                onClick={() => moveItem(index, index + 1)}
-                disabled={index === items.length - 1}
-                className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
-                title="Descendre"
-              >
-                ↓
-              </button>
-              <button
-                type="button"
-                onClick={() => removeItem(index)}
-                className="rounded-lg p-1 text-red-500 hover:bg-red-50"
-                title="Supprimer"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </div>
-          {item.image_url && (
-            <div className="overflow-hidden rounded-xl border border-orange-100">
-              <img src={item.image_url} alt={item.title_fr || 'promo'} className="h-28 w-full object-cover" />
-            </div>
-          )}
-          <LabeledInput
-            label="URL image"
-            value={item.image_url}
-            onChange={(value) => updateItem(index, { image_url: normalizeSafeText(value, '') })}
-            placeholder="https://..."
-          />
-          <div className="grid gap-2 md:grid-cols-2">
-            <LabeledInput
-              label="Titre FR"
-              value={item.title_fr}
-              onChange={(value) => updateItem(index, { title_fr: normalizeSafeText(value, '') })}
-              placeholder="Pack rentrée scolaire"
-            />
-            <LabeledInput
-              label="العنوان AR"
-              value={item.title_ar}
-              onChange={(value) => updateItem(index, { title_ar: normalizeSafeText(value, '') })}
-              dir="rtl"
-              placeholder="حزمة الدخول المدرسي"
-            />
-          </div>
-          <LabeledInput
-            label="Lien (optionnel)"
-            value={item.link}
-            onChange={(value) => updateItem(index, { link: normalizeUrlOrPath(value, '') })}
-            placeholder="/shop?promo=true"
-          />
-        </div>
+        <PromoItemRow
+          key={item.id || index}
+          item={item}
+          index={index}
+          total={items.length}
+          lang={lang}
+          onChange={(patch) => updateItem(index, patch)}
+          onRemove={() => removeItem(index)}
+          onMove={(delta) => moveItem(index, index + delta)}
+        />
       ))}
+      <SplashGalleryModal
+        open={galleryOpen}
+        lang={lang}
+        onClose={() => setGalleryOpen(false)}
+        onSelect={handleSelectTemplate}
+      />
     </div>
   );
 }
