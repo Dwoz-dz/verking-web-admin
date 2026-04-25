@@ -12,7 +12,8 @@ export type LiveResource =
   | 'orders'
   | 'customers'
   | 'wholesale'
-  | 'hero_slides';
+  | 'hero_slides'
+  | 'stocks';
 
 export type LiveSource = 'realtime' | 'focus' | 'poll';
 
@@ -38,6 +39,7 @@ const TABLES = [
   'customers',
   'wholesale_requests',
   'hero_slides',
+  'stock_movements',
 ] as const;
 const FALLBACK_POLL_MS = 45_000;
 const FALLBACK_RESOURCES: LiveResource[] = [
@@ -123,6 +125,10 @@ function mapPayloadToResources(payload: RealtimePostgresChangesPayload<any>): Li
       return ['wholesale'];
     case 'hero_slides':
       return ['hero_slides'];
+    case 'stock_movements':
+      // Stock ledger entries also imply the products row's stock_qty changed
+      // (the trigger updates both atomically), so refresh products too.
+      return ['stocks', 'products'];
     case 'store_settings': {
       const key = readStoreSettingsKey(payload);
       if (key === 'general') return ['store_settings'];

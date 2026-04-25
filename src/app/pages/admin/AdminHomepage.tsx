@@ -130,6 +130,7 @@ type HomepageSection = {
   promo_images?: PromoImage[];
   hero_animation?: CarouselAnimationConfig;
   promo_animation?: CarouselAnimationConfig;
+  show_text_overlay_global?: boolean;
 };
 
 const TRUST_ICON_OPTIONS: Array<{ value: string; label: string }> = [
@@ -531,6 +532,11 @@ function normalizeSection(value: any, fallback: HomepageSection): HomepageSectio
       fallback.promo_animation || DEFAULT_PROMO_ANIMATION,
     );
   }
+  if (typeof merged.show_text_overlay_global === 'boolean') {
+    base.show_text_overlay_global = merged.show_text_overlay_global;
+  } else if (typeof fallback.show_text_overlay_global === 'boolean') {
+    base.show_text_overlay_global = fallback.show_text_overlay_global;
+  }
   return base;
 }
 
@@ -711,12 +717,12 @@ export function AdminHomepage() {
   const [heroOverlaySavingState, setHeroOverlaySavingState] =
     useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [heroOverlaySavedAt, setHeroOverlaySavedAt] = useState<number | null>(null);
-  const heroOverlayGlobal = (draftConfig.hero as any)?.show_text_overlay_global !== false;
+  const heroOverlayGlobal = draftConfig.hero?.show_text_overlay_global !== false;
   const handleHeroOverlayGlobalToggle = async (next: boolean) => {
-    updateSection('hero', { show_text_overlay_global: next } as any);
+    updateSection('hero', { show_text_overlay_global: next });
     setHeroOverlaySavingState('saving');
     try {
-      await persistSectionPartial('hero', { show_text_overlay_global: next } as any);
+      await persistSectionPartial('hero', { show_text_overlay_global: next });
       setHeroOverlaySavingState('saved');
       setHeroOverlaySavedAt(Date.now());
     } catch {
@@ -2466,7 +2472,6 @@ function PromoImagesEditor({
           index={index}
           total={items.length}
           lang={lang}
-          onChange={(patch) => updateItem(index, patch)}
           onRemove={() => removeItem(index)}
           onMove={(delta) => moveItem(index, index + delta)}
         />

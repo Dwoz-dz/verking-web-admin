@@ -19,6 +19,24 @@ export type HeroBgMode = 'solid' | 'gradient' | 'image';
 export type HeroOverlayMode = 'none' | 'light' | 'dark';
 export type HeroAlign = 'start' | 'center' | 'end';
 
+/**
+ * Hero bento layout — every slide is rendered inside ONE of these
+ * 4 zones on the homepage:
+ *
+ *   ┌──────────────┬─────────┐
+ *   │              │ side_1  │
+ *   │     main     ├─────────┤
+ *   │   (large)    │ side_2  │
+ *   │              ├─────────┤
+ *   │              │ side_3  │
+ *   └──────────────┴─────────┘
+ *
+ * Zones with multiple active slides cycle as a carousel inside their
+ * slot. Zones with one slide show it statically. Defaults to 'main'.
+ */
+export type HeroZone = 'main' | 'side_1' | 'side_2' | 'side_3';
+export const HERO_ZONES: readonly HeroZone[] = ['main', 'side_1', 'side_2', 'side_3'];
+
 export type HeroTextPanel = {
   bg_mode: HeroBgMode;
   bg_color: string;
@@ -51,6 +69,8 @@ export type HeroSlide = {
   cta_label_ar: string | null;
   cta_url: string | null;
   text_panel: HeroTextPanel;
+  /** Bento slot the slide is rendered in. Defaults to 'main'. */
+  zone: HeroZone;
   created_at?: string;
   updated_at?: string;
 };
@@ -109,6 +129,7 @@ function normalizeSlide(row: any): HeroSlide {
     cta_label_ar: row.cta_label_ar || null,
     cta_url: row.cta_url || null,
     text_panel: normalizePanel(row.text_panel),
+    zone: (HERO_ZONES.includes(row.zone) ? row.zone : 'main') as HeroZone,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -161,6 +182,7 @@ export async function upsertHeroSlide(token: string, input: HeroSlideUpsertInput
     p_cta_url: input.cta_url ?? null,
     p_text_panel: input.text_panel ? { ...DEFAULT_HERO_TEXT_PANEL, ...input.text_panel } : DEFAULT_HERO_TEXT_PANEL,
     p_position: typeof input.position === 'number' ? input.position : null,
+    p_zone: HERO_ZONES.includes(input.zone as HeroZone) ? (input.zone as HeroZone) : 'main',
   });
   if (error) throw new Error(error.message || 'Unable to save hero slide');
   return normalizeSlide(data);

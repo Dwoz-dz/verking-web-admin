@@ -110,7 +110,7 @@ const navItems: Array<{
     accent: { from: "#06B6D4", to: "#0E7490", tint: "rgba(6,182,212,0.18)", active: "#22D3EE" },
   },
   {
-    to: "/admin/homepage",
+    to: "/admin/home",
     icon: Layout,
     label: "Page d'accueil",
     badge: null,

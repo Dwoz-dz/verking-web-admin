@@ -1,15 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { ChevronRight, ChevronLeft, Star, Package, Users, Award, Shield, Truck, Clock, Heart, CreditCard, Headphones, Quote } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Star, Package, Users, Award, Shield, Truck, Clock, Heart, CreditCard, Headphones, Quote, Sparkles, Flame, Tag, Compass, Briefcase } from 'lucide-react';
 import { useLang } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { api } from '../lib/api';
 import { CategoriesMarketingStrip } from '../components/home/CategoriesMarketingStrip';
 import { InlineAnnouncementStrip } from '../components/home/InlineAnnouncementStrip';
 import { HeroCarousel } from '../components/home/HeroCarousel';
+import { SectionMediaBackdrop } from '../components/home/SectionMediaBackdrop';
 import { normalizeCategoriesStrip } from '../lib/categoriesStrip';
-import { CATEGORIES_UPDATED_EVENT, CATEGORIES_UPDATED_KEY, CONTENT_UPDATED_KEY } from '../lib/realtime';
+import {
+  CATEGORIES_UPDATED_EVENT,
+  CATEGORIES_UPDATED_KEY,
+  CONTENT_UPDATED_KEY,
+  HOMEPAGE_UPDATED_EVENT,
+  HOMEPAGE_UPDATED_KEY,
+} from '../lib/realtime';
+import { subscribeRealtimeResources } from '../lib/realtimeLiveSync';
 import { ProductCard, DiscoverMoreCard } from '../components/ProductCard';
+import { ProductSectionDisplay } from '../components/home/ProductSectionDisplay';
 import {
   CarouselAnimationConfig,
   DEFAULT_PROMO_ANIMATION,
@@ -58,8 +67,14 @@ type HomepageSectionConfig = {
   cta_ar?: string;
   cta_link?: string;
   image?: string;
+  images?: string[];
   source_mode?: SourceMode;
   source_ref?: string;
+  /** Hand-picked product IDs from the admin multi-picker. When non-empty
+   *  this is the source of truth for the section — products render in
+   *  the exact order/selection the admin saved, with no silent fallback
+   *  to flag-based filtering. */
+  selected_product_ids?: string[];
   style_variant?: string;
   limit?: number;
   trust_items?: TrustItemConfig[];
@@ -159,7 +174,142 @@ const GLASS_CARD_STYLE: React.CSSProperties = {
   boxShadow: '0 14px 36px -18px rgba(32,83,137,0.30)',
 };
 
-const HOME_PRODUCT_GRID_CLASS = 'grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4';
+// Responsive product grid for the homepage.
+//   • mobile (default)  → 2 cols, tight 12px gap so cards stay readable
+//   • sm  (≥640px)      → 3 cols
+//   • lg  (≥1024px)     → 4 cols on tablets/laptops
+//   • 2xl (≥1536px)     → 5 cols on wide desktops, so a "Voir 8" config
+//                          fills the row gracefully without huge gutters
+const HOME_PRODUCT_GRID_CLASS =
+  'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-4 gap-3 md:gap-4 lg:gap-5';
+
+/**
+ * Glowing gradient-text style for section titles (Vedettes, Nouveautés,
+ * Best Sellers, Categories…). The user asked for "متوهج" (glowing),
+ * "أقوى خط" (bolder font), and "لون قوي" (strong color) on the headings.
+ *
+ * Rendered as gradient-clipped text + two stacked drop-shadows: the
+ * inner one gives the colored "halo" glow, the outer one adds depth
+ * so the title doesn't dissolve into bright section backdrops.
+ *
+ * `palette` lets each section tint its title to its own brand color
+ * (Featured = warm orange, Nouveautés = cool sky, Best = amber→pink,
+ * Categories = indigo→teal) while keeping the same overall recipe.
+ */
+type TitleGlowPalette = {
+  /** CSS gradient passed straight to `background`. */
+  gradient: string;
+  /** Inner halo color (rgba) — visible glow. */
+  glow: string;
+  /** Outer drop color (rgba) — depth/legibility on bright backdrops. */
+  drop: string;
+};
+
+const GLOWING_TITLE_PALETTES: Record<
+  'featured' | 'sky' | 'amber' | 'indigo' | 'rose' | 'emerald' | 'violet' | 'slate',
+  TitleGlowPalette
+> = {
+  featured: {
+    gradient: 'linear-gradient(135deg,#ef4444 0%,#f97316 35%,#f59e0b 70%,#fde047 100%)',
+    glow: 'rgba(249,115,22,0.55)',
+    drop: 'rgba(155,63,0,0.40)',
+  },
+  sky: {
+    gradient: 'linear-gradient(135deg,#0ea5e9 0%,#3b82f6 50%,#6366f1 100%)',
+    glow: 'rgba(14,165,233,0.55)',
+    drop: 'rgba(2,132,199,0.40)',
+  },
+  amber: {
+    gradient: 'linear-gradient(135deg,#f59e0b 0%,#ef4444 50%,#db2777 100%)',
+    glow: 'rgba(245,158,11,0.55)',
+    drop: 'rgba(190,18,60,0.40)',
+  },
+  indigo: {
+    gradient: 'linear-gradient(135deg,#6366f1 0%,#0ea5e9 50%,#14b8a6 100%)',
+    glow: 'rgba(99,102,241,0.55)',
+    drop: 'rgba(67,56,202,0.40)',
+  },
+  // Hot promo colors — pink → rose → orange. Used by the Promotions
+  // section so the "PROMO" pill reads as energetic / "limited offer".
+  rose: {
+    gradient: 'linear-gradient(135deg,#ec4899 0%,#f43f5e 50%,#f97316 100%)',
+    glow: 'rgba(236,72,153,0.55)',
+    drop: 'rgba(190,18,60,0.40)',
+  },
+  // Calm trust/safety green — Trust section ("Pourquoi choisir VERKING").
+  emerald: {
+    gradient: 'linear-gradient(135deg,#10b981 0%,#06b6d4 50%,#0ea5e9 100%)',
+    glow: 'rgba(16,185,129,0.55)',
+    drop: 'rgba(4,120,87,0.40)',
+  },
+  // Premium / quality vibe — Testimonials section ("Avis clients").
+  violet: {
+    gradient: 'linear-gradient(135deg,#a855f7 0%,#8b5cf6 50%,#ec4899 100%)',
+    glow: 'rgba(168,85,247,0.55)',
+    drop: 'rgba(91,33,182,0.40)',
+  },
+  // Corporate / B2B — Wholesale section ("Espace Grossiste").
+  slate: {
+    gradient: 'linear-gradient(135deg,#1e3a8a 0%,#1d4ed8 50%,#0ea5e9 100%)',
+    glow: 'rgba(29,78,216,0.55)',
+    drop: 'rgba(30,58,138,0.40)',
+  },
+};
+
+function glowingTitleStyle(paletteKey: keyof typeof GLOWING_TITLE_PALETTES): React.CSSProperties {
+  const p = GLOWING_TITLE_PALETTES[paletteKey];
+  return {
+    fontFamily: 'Montserrat, ui-sans-serif, system-ui, sans-serif',
+    fontWeight: 900,
+    letterSpacing: '-0.025em',
+    background: p.gradient,
+    WebkitBackgroundClip: 'text',
+    backgroundClip: 'text',
+    color: 'transparent',
+    WebkitTextFillColor: 'transparent',
+    // Stacked filter: inner colored halo + outer dark drop. The dark
+    // drop is what makes the gradient legible on a bright photo
+    // backdrop (Categories panel sits over Hero overflow).
+    filter: `drop-shadow(0 2px 4px ${p.drop}) drop-shadow(0 0 18px ${p.glow})`,
+  };
+}
+
+/**
+ * SectionBadge — the colorful pill that prefixes every section title
+ * (e.g. "PREMIUM ⭐ Produits Vedettes"). Reuses the same per-section
+ * palette as the glowing titles so badge + title read as a matched
+ * pair. The user asked for "ألوان جكيل و ستايل قوي طفولي" (vivid,
+ * playful, kids-back-to-school colors) — the gradient + inset
+ * highlight + drop shadow is what makes each pill feel "glossy"
+ * rather than a flat fill.
+ */
+function SectionBadge({
+  palette,
+  icon,
+  label,
+}: {
+  palette: keyof typeof GLOWING_TITLE_PALETTES;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  const p = GLOWING_TITLE_PALETTES[palette];
+  return (
+    <div
+      className="inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest text-white"
+      style={{
+        background: p.gradient,
+        boxShadow: `0 8px 18px -8px ${p.glow}, inset 0 1px 0 rgba(255,255,255,0.4)`,
+        letterSpacing: '0.06em',
+        fontFamily: 'Montserrat, ui-sans-serif, system-ui, sans-serif',
+      }}
+    >
+      <span className="inline-flex items-center justify-center text-white drop-shadow-sm">
+        {icon}
+      </span>
+      {label}
+    </div>
+  );
+}
 
 function asText(value: unknown, fallback = '') {
   return typeof value === 'string' ? value.trim() : fallback;
@@ -234,22 +384,49 @@ export function HomePage() {
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (!event.key || event.key === CATEGORIES_UPDATED_KEY || event.key === CONTENT_UPDATED_KEY) {
+      if (
+        !event.key ||
+        event.key === CATEGORIES_UPDATED_KEY ||
+        event.key === CONTENT_UPDATED_KEY ||
+        event.key === HOMEPAGE_UPDATED_KEY
+      ) {
         loadHomeData();
       }
     };
 
     const onCategoriesUpdated = () => loadHomeData();
+    const onHomepageUpdated = () => loadHomeData();
     const onFocus = () => loadHomeData();
 
     window.addEventListener('storage', onStorage);
     window.addEventListener(CATEGORIES_UPDATED_EVENT, onCategoriesUpdated);
+    window.addEventListener(HOMEPAGE_UPDATED_EVENT, onHomepageUpdated);
     window.addEventListener('focus', onFocus);
+
+    // Supabase realtime subscription — when admin publishes any section,
+    // homepage_sections / products / categories / banners / theme / content
+    // / hero_slides tables emit changes; we debounce-reload on any of them
+    // so the storefront reflects publishes instantly without a refresh.
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => {
+        reloadTimer = null;
+        loadHomeData();
+      }, 250);
+    };
+    const unsubscribeRealtime = subscribeRealtimeResources(
+      ['homepage_config', 'products', 'categories', 'banners', 'theme', 'content', 'hero_slides', 'store_settings'],
+      scheduleReload,
+    );
 
     return () => {
       window.removeEventListener('storage', onStorage);
       window.removeEventListener(CATEGORIES_UPDATED_EVENT, onCategoriesUpdated);
+      window.removeEventListener(HOMEPAGE_UPDATED_EVENT, onHomepageUpdated);
       window.removeEventListener('focus', onFocus);
+      if (reloadTimer) clearTimeout(reloadTimer);
+      unsubscribeRealtime();
     };
   }, [loadHomeData]);
 
@@ -290,57 +467,81 @@ export function HomePage() {
     [homepageConfig],
   );
 
+  /**
+   * Resolves the real products an admin configured for a homepage section.
+   *
+   * Resolution rules (in priority order — NO silent fallback to padding):
+   *   1. If `selected_product_ids` is a non-empty array, render exactly
+   *      those products in the admin's saved order. IDs that no longer
+   *      resolve are skipped (deleted/inactive products) and the rest
+   *      still render — the section is NOT padded with random products.
+   *   2. Otherwise, parse `source_ref` (CSV) for preset slugs (featured,
+   *      new_arrivals, best_sellers, promotions, all) and resolve each
+   *      preset against real product flags (is_featured, is_new, …).
+   *      Any non-preset entries in source_ref are also treated as IDs
+   *      so legacy configs saved before the multi-picker existed keep
+   *      working.
+   *   3. If both #1 and #2 yield zero products, return [] — the storefront
+   *      hides the section entirely instead of showing fake placeholders.
+   *
+   * IMPORTANT: this function used to silently pad the pool with arbitrary
+   * `activeProducts` whenever the admin's selection was smaller than the
+   * limit. That diluted real admin choices with random products and is
+   * exactly what the user reported. The pool is now strictly what the
+   * admin asked for, sliced to limit.
+   */
   const resolveProductsBySource = useCallback(
-    (sectionKey: string, fallbackFilter: (product: any) => boolean) => {
+    (sectionKey: string) => {
       const section = getSection(sectionKey);
-      const refs = parseSourceRefs(section.source_ref);
-      const limit = Math.min(24, Math.max(1, Number(section.limit || 8)));
+      const limit = Math.min(48, Math.max(1, Number(section.limit || 8)));
+      const seen = new Set<string>();
+      const pool: any[] = [];
 
-      let pool: any[] = [];
-      if (section.source_mode === 'products') {
-        const selectedByPreset: any[] = [];
-        const selectedById: any[] = [];
-        for (const ref of refs) {
-          if (!PRODUCT_SOURCE_KEYS.has(ref)) {
-            const product = activeProducts.find((item) => item.id === ref);
-            if (product) selectedById.push(product);
-            continue;
-          }
-          if (ref === 'featured') {
-            selectedByPreset.push(...activeProducts.filter((product) => product?.is_featured || product?.show_on_homepage || product?.show_in_featured));
-          } else if (ref === 'new_arrivals') {
-            selectedByPreset.push(...activeProducts.filter((product) => product?.is_new || product?.show_in_new_arrivals));
-          } else if (ref === 'best_sellers') {
-            selectedByPreset.push(...activeProducts.filter((product) => product?.is_best_seller || product?.show_in_best_sellers));
-          } else if (ref === 'promotions') {
-            selectedByPreset.push(...activeProducts.filter((product) => product?.show_in_promotions || (product?.sale_price && product.sale_price < product.price)));
-          } else if (ref === 'all') {
-            selectedByPreset.push(...activeProducts);
-          }
+      const push = (product: any) => {
+        if (!product || !product.id || seen.has(product.id)) return;
+        seen.add(product.id);
+        pool.push(product);
+      };
+
+      // (1) Hand-picked IDs — the source of truth, in the admin's order.
+      if (Array.isArray(section.selected_product_ids)) {
+        for (const id of section.selected_product_ids) {
+          if (typeof id !== 'string' || !id) continue;
+          const product = activeProducts.find((item) => item.id === id);
+          if (product) push(product);
         }
-
-        const deduped = new Map<string, any>();
-        [...selectedByPreset, ...selectedById].forEach((item) => {
-          if (item?.id && !deduped.has(item.id)) deduped.set(item.id, item);
-        });
-        pool = Array.from(deduped.values());
-      } else {
-        pool = activeProducts.filter(fallbackFilter);
       }
 
-      const fallbackMatches = activeProducts.filter(fallbackFilter);
-
-      if (pool.length === 0) {
-        pool = fallbackMatches;
-      }
-
-      if (pool.length < limit) {
-        const deduped = new Map<string, any>();
-        const supplementalPool = sectionKey === 'promotions' ? fallbackMatches : [...fallbackMatches, ...activeProducts];
-        [...pool, ...supplementalPool].forEach((item) => {
-          if (item?.id && !deduped.has(item.id)) deduped.set(item.id, item);
-        });
-        pool = Array.from(deduped.values());
+      // (2) Preset slugs + legacy CSV IDs from source_ref.
+      const refs = parseSourceRefs(section.source_ref);
+      for (const ref of refs) {
+        if (PRODUCT_SOURCE_KEYS.has(ref)) {
+          if (ref === 'featured') {
+            activeProducts
+              .filter((p) => p?.is_featured || p?.show_on_homepage || p?.show_in_featured)
+              .forEach(push);
+          } else if (ref === 'new_arrivals') {
+            activeProducts
+              .filter((p) => p?.is_new || p?.show_in_new_arrivals)
+              .forEach(push);
+          } else if (ref === 'best_sellers') {
+            activeProducts
+              .filter((p) => p?.is_best_seller || p?.show_in_best_sellers)
+              .forEach(push);
+          } else if (ref === 'promotions') {
+            activeProducts
+              .filter((p) => p?.show_in_promotions || (p?.sale_price && p.sale_price < p.price))
+              .forEach(push);
+          } else if (ref === 'all') {
+            activeProducts.forEach(push);
+          }
+          continue;
+        }
+        // Non-preset ref → treat as a legacy product ID (configs saved
+        // before selected_product_ids existed). Already-included IDs
+        // are deduped by `push`.
+        const product = activeProducts.find((item) => item.id === ref);
+        if (product) push(product);
       }
 
       return pool.slice(0, limit);
@@ -418,41 +619,10 @@ export function HomePage() {
 
   const categoriesStrip = useMemo(() => normalizeCategoriesStrip(content), [content]);
 
-  const featuredProducts = useMemo(
-    () =>
-      resolveProductsBySource(
-        'featured',
-        (product) => product?.is_featured || product?.show_on_homepage || product?.show_in_featured,
-      ),
-    [resolveProductsBySource],
-  );
-
-  const newProducts = useMemo(
-    () =>
-      resolveProductsBySource(
-        'new_arrivals',
-        (product) => product?.is_new || product?.show_in_new_arrivals,
-      ),
-    [resolveProductsBySource],
-  );
-
-  const bestSellerProducts = useMemo(
-    () =>
-      resolveProductsBySource(
-        'best_sellers',
-        (product) => product?.is_best_seller || product?.show_in_best_sellers,
-      ),
-    [resolveProductsBySource],
-  );
-
-  const promoProducts = useMemo(
-    () =>
-      resolveProductsBySource(
-        'promotions',
-        (product) => product?.show_in_promotions || (product?.sale_price && product.sale_price < product.price),
-      ),
-    [resolveProductsBySource],
-  );
+  const featuredProducts = useMemo(() => resolveProductsBySource('featured'), [resolveProductsBySource]);
+  const newProducts = useMemo(() => resolveProductsBySource('new_arrivals'), [resolveProductsBySource]);
+  const bestSellerProducts = useMemo(() => resolveProductsBySource('best_sellers'), [resolveProductsBySource]);
+  const promoProducts = useMemo(() => resolveProductsBySource('promotions'), [resolveProductsBySource]);
 
   const categoryCards = useMemo(
     () => resolveCategoriesBySource('categories'),
@@ -593,7 +763,7 @@ export function HomePage() {
         className="min-h-screen w-full overflow-x-hidden"
         style={{ background: 'linear-gradient(160deg,#bbd8f0 0%,#cce6ff 20%,#dbeeff 45%,#f0f8ff 80%,#f8fbff 100%)' }}
       >
-        <div className="mx-auto w-full max-w-7xl px-4 py-8 space-y-8">
+        <div className="mx-auto w-full max-w-[1480px] px-4 md:px-6 py-8 space-y-8">
           {/* Hero skeleton */}
           <div className="relative overflow-hidden rounded-3xl bg-white/50 backdrop-blur-sm shadow-xl aspect-[16/7] w-full">
             <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-sky-100/50 via-blue-100/60 to-sky-100/50" />
@@ -662,19 +832,34 @@ export function HomePage() {
 
       <div className="relative z-10">
 
-        {/* ─── HERO (Carrousel publicitaire principal) ─── */}
-        <section className="px-3 md:px-5 pt-4 pb-0 max-w-[1260px] mx-auto">
+        {/* ─── HERO (Carrousel publicitaire principal) ───
+            The hero slides themselves come from the hero_slides table
+            (managed via the dedicated Hero Carousel admin manager). On
+            top of those slides, the admin can also configure a section-
+            level background (image/video/gallery) in Page d'accueil →
+            Hero. We render that as a backdrop layer behind the carousel
+            so the section honors the same admin-configurable background
+            contract as every other homepage section. */}
+        <section className="relative isolate px-3 md:px-5 pt-4 pb-0 max-w-[1480px] mx-auto">
+          {(asText(heroSection.image) || (Array.isArray(heroSection.images) && heroSection.images.length > 0)) && (
+            <SectionMediaBackdrop
+              url={heroSection.image}
+              urls={heroSection.images}
+              roundedClass="rounded-[1.75rem]"
+              overlay={0.25}
+            />
+          )}
           <HeroCarousel
             lang={lang}
             dir={dir}
-            className="mb-0"
+            className="relative z-10 mb-0"
             animation={(heroSection as any)?.hero_animation || null}
             showOverlayGlobal={(heroSection as any)?.show_text_overlay_global !== false}
           />
         </section>
         {/* Legacy static hero — used only as auto-fallback when admin has no active slides (wrapped below in conditional) */}
         {false && (
-        <section className="px-3 md:px-5 pt-4 pb-0 max-w-[1260px] mx-auto">
+        <section className="px-3 md:px-5 pt-4 pb-0 max-w-[1480px] mx-auto">
           <div className="relative overflow-hidden rounded-[2rem] p-3 md:p-5" style={GLASS_PANEL_STYLE}>
             <div className="pointer-events-none absolute -top-16 -right-16 h-56 w-56 rounded-full blur-3xl opacity-40" style={{ background: 'radial-gradient(circle,rgba(255,255,255,0.9) 0%, transparent 70%)' }} />
             <div className="pointer-events-none absolute -bottom-16 left-6 h-48 w-48 rounded-full blur-3xl opacity-35" style={{ background: 'radial-gradient(circle,rgba(191,229,255,0.9) 0%, transparent 70%)' }} />
@@ -746,7 +931,7 @@ export function HomePage() {
           </div>
         </section>
         )}
-        <section className="pt-8 pb-0 px-3 md:px-5 max-w-[1260px] mx-auto">
+        <section className="pt-8 pb-0 px-3 md:px-5 max-w-[1480px] mx-auto">
           {false && content?.categories_marquee_enabled === true && (
             <div className="mb-4">
               <InlineAnnouncementStrip content={content} lang={lang} className="rounded-2xl" />
@@ -759,30 +944,111 @@ export function HomePage() {
           )}
         </section>
 
-        {/* ─── MAIN BENTO CONTENT ─── */}
-        <section className="px-3 md:px-5 py-6 max-w-[1260px] mx-auto space-y-5">
+        {/* ─── MAIN BENTO CONTENT ───
+            `space-y-5` (20 px) used to wedge sections too tightly under
+            each other — Nouveautés visibly leaning into the panel
+            above. Bumped to 8/10 for breathing room without making the
+            page feel sparse. */}
+        <section className="px-3 md:px-5 py-6 max-w-[1480px] mx-auto space-y-8 md:space-y-10">
 
-          {/* Bento Row 1: Featured Products + Categories */}
-          {(showFeaturedSection && featuredProducts.length > 0) || categorySection.enabled !== false ? (
-            <div className="grid gap-5 lg:grid-cols-[3fr_2fr]">
+          {/* Bento Row 1: Featured Products + Categories.
+              The bento split (3fr / 2fr) is only useful when BOTH panels
+              are present. If only one of them is enabled / has content,
+              the surviving panel is given the whole row instead of
+              squatting in 3/5 of the row with a wasted empty slot.
+              `bothPanelsActive` is the gate — flip to single-column when
+              false so the active panel breathes. */}
+          {(() => {
+            const featuredActive = showFeaturedSection && featuredProducts.length > 0;
+            const categoriesActive = categorySection.enabled !== false && categoryCards.length > 0;
+            if (!featuredActive && !categoriesActive) return null;
+            // Categories used to share the row with Featured (3fr / 2fr split)
+            // but the user asked us to "shrink Nos Categories, make it horizontal,
+            // give Featured the full width so we have more room for product
+            // showcase + purchase CTA". So Categories is now a slim full-width
+            // strip that sits ABOVE Featured, and Featured always uses the
+            // standard 4-up grid below.
+            const rowClass = 'space-y-5';
+            const featuredGridClass =
+              'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-4 gap-3 md:gap-4 lg:gap-5';
+            return (
+            <div className={rowClass}>
 
-              {/* Featured Products Panel */}
-              {showFeaturedSection && featuredProducts.length > 0 && (
+              {/* Categories Strip — slim horizontal panel above Featured.
+                  Was a tall side-panel listing 4 categories vertically;
+                  now a single-row scroller of compact chips so it eats
+                  ~80–100 px instead of mirroring the Featured panel
+                  height, freeing up the full row width for the product
+                  showcase below. */}
+              {categoriesActive && (
                 <div
-                  className="rounded-[1.75rem] p-5 md:p-7"
+                  className="relative isolate overflow-hidden rounded-[1.75rem] px-4 py-3 md:px-5 md:py-4"
                   style={GLASS_PANEL_STYLE}
                 >
+                  <SectionMediaBackdrop url={categorySection.image} urls={categorySection.images} roundedClass="rounded-[1.75rem]" overlay={0.5} />
+                  <div className="relative z-10 flex items-center gap-3 mb-2.5">
+                    <SectionBadge
+                      palette="indigo"
+                      icon={<Compass size={13} strokeWidth={2.5} />}
+                      label={lang === 'ar' ? 'تصفح' : 'Explorer'}
+                    />
+                    <h2 className="text-lg md:text-xl tracking-tight" style={glowingTitleStyle('indigo')}>
+                      {pickLocalized(categorySection.title_fr, categorySection.title_ar, lang, lang === 'ar' ? 'الفئات' : 'Catégories')}
+                    </h2>
+                    <Link
+                      to="/shop"
+                      className="ms-auto inline-flex items-center gap-1 text-[11px] font-bold transition-all px-2.5 py-1 rounded-lg hover:brightness-95"
+                      style={{ color: ETHEREAL_SECONDARY, background: 'rgba(23,97,139,0.10)' }}
+                    >
+                      {lang === 'ar' ? 'الكل' : 'Tout'}
+                      <ChevronRight size={11} className="rtl:rotate-180" />
+                    </Link>
+                  </div>
+                  {/* Horizontal scroller — chips snap-aligned. scrollbar
+                      hidden via the inline `scrollbarWidth: 'none'`, the
+                      same trick the product carousel uses. */}
+                  <div
+                    className="relative z-10 flex gap-2.5 overflow-x-auto pb-1 snap-x snap-mandatory"
+                    style={{ scrollbarWidth: 'none' }}
+                  >
+                    {categoryCards.map((category) => (
+                      <Link
+                        key={category.id}
+                        to={`/shop?category=${encodeURIComponent(category.id)}`}
+                        className="group snap-start shrink-0 flex flex-col items-center gap-1.5 w-[78px] rounded-2xl p-1.5 transition-all duration-200 hover:-translate-y-0.5"
+                      >
+                        <img
+                          src={category.image || LOCAL_HERO_ALT}
+                          alt={pickLocalized(category.name_fr, category.name_ar, lang)}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-14 w-14 rounded-2xl object-cover shadow-md ring-2 ring-white/70 transition-transform duration-300 group-hover:scale-[1.06]"
+                        />
+                        <span className="text-[11px] font-bold text-center leading-tight text-[#173a60] line-clamp-2">
+                          {pickLocalized(category.name_fr, category.name_ar, lang)}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Featured Products Panel */}
+              {featuredActive && (
+                <div
+                  className="relative isolate overflow-hidden rounded-[1.75rem] p-5 md:p-7"
+                  style={GLASS_PANEL_STYLE}
+                >
+                  <SectionMediaBackdrop url={featuredSection.image} urls={featuredSection.images} roundedClass="rounded-[1.75rem]" overlay={0.5} />
                   {/* Panel header */}
                   <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-3">
-                      <div
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest text-white shadow"
-                        style={{ background: `linear-gradient(135deg,${ETHEREAL_PRIMARY},${ETHEREAL_PRIMARY_LIGHT})` }}
-                      >
-                        <Star size={12} className="fill-white" />
-                        {lang === 'ar' ? 'مختار' : 'Premium'}
-                      </div>
-                      <h2 className="font-black text-xl md:text-2xl text-gray-900 tracking-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      <SectionBadge
+                        palette="featured"
+                        icon={<Star size={13} strokeWidth={2.5} className="fill-white" />}
+                        label={lang === 'ar' ? 'مختار' : 'Premium'}
+                      />
+                      <h2 className="text-2xl md:text-3xl tracking-tight" style={glowingTitleStyle('featured')}>
                         {pickLocalized(featuredSection.title_fr, featuredSection.title_ar, lang, lang === 'ar' ? 'منتجات مختارة' : 'Produits Phare')}
                       </h2>
                     </div>
@@ -798,14 +1064,14 @@ export function HomePage() {
                   <p className="text-gray-500 text-xs md:text-sm font-medium mb-5 -mt-2">
                     {pickLocalized(featuredSection.subtitle_fr, featuredSection.subtitle_ar, lang, lang === 'ar' ? 'اختياراتنا الأبرز لهذا الموسم' : 'Nos sélections phares de la saison')}
                   </p>
-                  <div className={HOME_PRODUCT_GRID_CLASS}>
-                    {featuredProducts.slice(0, 8).map((product) => (
-                      <ProductCard key={product.id} product={product} />
-                    ))}
-                    {featuredProducts.length === 1 && (
-                      <DiscoverMoreCard href={asText(featuredSection.cta_link) || '/shop?featured=true'} />
-                    )}
-                  </div>
+                  <ProductSectionDisplay
+                    sectionKey="featured"
+                    products={featuredProducts}
+                    style={featuredSection.style_variant || 'grid'}
+                    dir={dir as 'ltr' | 'rtl'}
+                    gridClassName={featuredGridClass}
+                    discoverMoreHref={asText(featuredSection.cta_link) || '/shop?featured=true'}
+                  />
                   <div className="sm:hidden mt-4 flex justify-center">
                     <Link
                       to={asText(featuredSection.cta_link) || '/shop?featured=true'}
@@ -818,82 +1084,45 @@ export function HomePage() {
                 </div>
               )}
 
-              {/* Categories Panel */}
-              {categorySection.enabled !== false && categoryCards.length > 0 && (
-                <div
-                  className="rounded-[1.75rem] p-5 md:p-7"
-                  style={GLASS_PANEL_STYLE}
-                >
-                  <div className="flex items-center justify-between mb-5">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest text-white shadow"
-                        style={{ background: `linear-gradient(135deg,${ETHEREAL_SECONDARY},#2d7aa4)` }}
-                      >
-                        {lang === 'ar' ? 'تصفح' : 'Explorer'}
-                      </div>
-                      <h2 className="font-black text-xl md:text-2xl text-gray-900 tracking-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-                        {pickLocalized(categorySection.title_fr, categorySection.title_ar, lang, lang === 'ar' ? 'الفئات' : 'Catégories')}
-                      </h2>
-                    </div>
-                    <Link
-                      to="/shop"
-                      className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold transition-all px-4 py-2 rounded-xl hover:brightness-95"
-                      style={{ color: ETHEREAL_SECONDARY, background: 'rgba(23,97,139,0.10)' }}
-                    >
-                      {lang === 'ar' ? 'عرض الكل' : 'Voir tout'}
-                      <ChevronRight size={13} className="rtl:rotate-180" />
-                    </Link>
-                  </div>
-                  <div className="space-y-3">
-                    {categoryCards.slice(0, 4).map((category) => (
-                      <Link
-                        key={category.id}
-                        to={`/shop?category=${encodeURIComponent(category.id)}`}
-                        className="group flex items-center gap-3 rounded-2xl p-3 transition-all duration-300 hover:-translate-y-0.5"
-                        style={GLASS_CARD_STYLE}
-                      >
-                        <img
-                          src={category.image || LOCAL_HERO_ALT}
-                          alt={pickLocalized(category.name_fr, category.name_ar, lang)}
-                          loading="lazy"
-                          decoding="async"
-                          className="h-14 w-14 rounded-xl object-cover shadow-sm"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-black text-[#173a60] text-sm md:text-base tracking-tight leading-tight line-clamp-2">
-                            {pickLocalized(category.name_fr, category.name_ar, lang)}
-                          </h3>
-                        </div>
-                        <span className="w-8 h-8 rounded-full flex items-center justify-center text-[#17618b] bg-white/65">
-                          <ChevronRight size={14} className="rtl:rotate-180" />
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
-          ) : null}
+            );
+          })()}
           {/* Bento Row 2: Promo Block — unified text + integrated carousel */}
           {promoSection.enabled !== false && (promoCarouselImages.length > 0 || promoProducts.length > 0 || asText(promoSection.image)) && (
-            <div className="rounded-[1.75rem] overflow-hidden p-4 md:p-5" style={GLASS_PANEL_STYLE}>
+            <div className="relative isolate overflow-hidden rounded-[1.75rem] p-4 md:p-5" style={GLASS_PANEL_STYLE}>
+              {/* Admin-configured section background (image / video / gallery).
+                  Sits behind the promo content — the inner glass card stays
+                  legible because SectionMediaBackdrop applies a dark overlay. */}
+              <SectionMediaBackdrop url={promoSection.image} urls={promoSection.images} roundedClass="rounded-[1.75rem]" overlay={0.35} />
               {/* Unified integrated frame: text zone + carousel in one seamless card */}
               <div
-                className="rounded-[1.5rem] overflow-hidden grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] gap-0"
+                className="relative rounded-[1.5rem] overflow-hidden grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] gap-0"
                 style={GLASS_CARD_STYLE}
               >
                 {/* LEFT ZONE — bilingual text + CTA (mobile: appears below carousel) */}
                 <div className="order-2 lg:order-1 p-6 md:p-8 lg:p-10 flex flex-col justify-center">
-                  <div
-                    className="inline-flex items-center gap-2 mb-4 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-[0.14em] text-white self-start"
-                    style={{ background: `linear-gradient(135deg,${ETHEREAL_PRIMARY},${ETHEREAL_PRIMARY_LIGHT})` }}
-                  >
-                    {lang === 'ar' ? 'عروض' : 'Promo'}
+                  <div className="self-start mb-4">
+                    <SectionBadge
+                      palette="rose"
+                      icon={<Tag size={13} strokeWidth={2.5} />}
+                      label={lang === 'ar' ? 'عروض' : 'Promo'}
+                    />
                   </div>
+                  {/* Promotions title sits on a WHITE glass card, not on
+                      a media backdrop like the other sections. The
+                      rose-gradient text disappears on white because its
+                      lightest stop (#f97316 orange) blends with the
+                      background. Use a strong solid navy + tight rose
+                      drop-shadow so the title pops without losing the
+                      "promo" color identity. */}
                   <h2
-                    className="font-black text-2xl md:text-4xl lg:text-5xl text-[#11233d] tracking-tight leading-[1.05] mb-2"
-                    style={{ fontFamily: 'Montserrat, sans-serif' }}
+                    className="font-black text-2xl md:text-4xl lg:text-5xl tracking-tight leading-[1.05] mb-2"
+                    style={{
+                      fontFamily: 'Montserrat, ui-sans-serif, system-ui, sans-serif',
+                      color: '#11233d',
+                      letterSpacing: '-0.025em',
+                      textShadow: '0 2px 0 rgba(244,63,94,0.18), 0 0 22px rgba(236,72,153,0.25)',
+                    }}
                   >
                     {promoTitle}
                   </h2>
@@ -927,31 +1156,58 @@ export function HomePage() {
               </div>
 
               {promoProducts.length > 0 && (
-                <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
-                  {promoProducts.slice(0, 8).map((product) => (
-                    <ProductCard key={product.id} product={product} />
-                  ))}
-                  {promoProducts.length === 1 && (
-                    <DiscoverMoreCard href={promoLink || '/shop?promo=true'} />
-                  )}
+                <div className="relative mt-5">
+                  <ProductSectionDisplay
+                    sectionKey="promotions"
+                    products={promoProducts}
+                    style={promoSection.style_variant || 'grid'}
+                    dir={dir as 'ltr' | 'rtl'}
+                    discoverMoreHref={promoLink || '/shop?promo=true'}
+                  />
                 </div>
               )}
             </div>
           )}
 
 
-          {/* Bento Row 3: New Arrivals + Best Sellers */}
-          {(showNewSection && newProducts.length > 0) || (showBestSection && bestSellerProducts.length > 0) ? (
-            <div className={`grid gap-5 ${showNewSection ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
-              {showNewSection && newProducts.length > 0 && (
+          {/* Nouveautés + Meilleures Ventes — STACKED full-width.
+              The previous side-by-side bento halved each panel's width,
+              which forced product cards into narrow strips. Following
+              the Promotions section pattern, both sections now render
+              full-width one above the other. They get the same card
+              cadence (2 / 3 / 3 / 4) Promotions uses, so the cards
+              read as a real ecommerce grid instead of a bento sliver.
+              Vertical spacing comes from the parent `space-y-8 md:space-y-10`
+              on the bento root, so panels can never visually collide. */}
+          {(() => {
+            const newActive = showNewSection && newProducts.length > 0;
+            const bestActive = showBestSection && bestSellerProducts.length > 0;
+            if (!newActive && !bestActive) return null;
+            // Always single-column row — even when both are active —
+            // so each panel takes the full content width like Promotions.
+            const rowClass = 'grid gap-8 md:gap-10';
+            // Full-width grid ladder. 2 cols mobile, 3 cols at sm/lg,
+            // 4 cols only on 2xl. Matches DEFAULT_GRID exactly so the
+            // cards feel identical to the Promotions section.
+            const productsGridClass =
+              'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-4 gap-3 md:gap-4 lg:gap-5';
+            return (
+            <div className={rowClass}>
+              {newActive && (
                 <div
-                  className="rounded-[1.75rem] p-5 md:p-7"
+                  className="relative isolate overflow-hidden rounded-[1.75rem] p-5 md:p-7"
                   style={GLASS_PANEL_STYLE}
                 >
+                  <SectionMediaBackdrop url={newSection.image} urls={newSection.images} roundedClass="rounded-[1.75rem]" overlay={0.5} />
                   <div className="flex items-start justify-between mb-5">
                     <div>
-                      <div className="flex items-center mb-1.5">
-                        <h2 className="font-black text-xl md:text-2xl text-gray-900 tracking-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      <div className="flex items-center gap-3 mb-1.5">
+                        <SectionBadge
+                          palette="sky"
+                          icon={<Sparkles size={13} strokeWidth={2.5} />}
+                          label={lang === 'ar' ? 'جديد' : 'Nouveau'}
+                        />
+                        <h2 className="text-2xl md:text-3xl tracking-tight" style={glowingTitleStyle('sky')}>
                           {pickLocalized(newSection.title_fr, newSection.title_ar, lang, lang === 'ar' ? 'وصل حديثًا' : 'Nouveautés')}
                         </h2>
                       </div>
@@ -966,26 +1222,32 @@ export function HomePage() {
                       <ChevronRight size={16} className="rtl:rotate-180" />
                     </Link>
                   </div>
-                  <div className={HOME_PRODUCT_GRID_CLASS}>
-                    {newProducts.slice(0, 8).map((product) => (
-                      <ProductCard key={product.id} product={product} />
-                    ))}
-                    {newProducts.length === 1 && (
-                      <DiscoverMoreCard href={asText(newSection.cta_link) || '/shop?new=true'} />
-                    )}
-                  </div>
+                  <ProductSectionDisplay
+                    sectionKey="new_arrivals"
+                    products={newProducts}
+                    style={newSection.style_variant || 'grid'}
+                    dir={dir as 'ltr' | 'rtl'}
+                    gridClassName={productsGridClass}
+                    discoverMoreHref={asText(newSection.cta_link) || '/shop?new=true'}
+                  />
                 </div>
               )}
 
-              {showBestSection && bestSellerProducts.length > 0 && (
+              {bestActive && (
                 <div
-                  className="rounded-[1.75rem] p-5 md:p-7"
+                  className="relative isolate overflow-hidden rounded-[1.75rem] p-5 md:p-7"
                   style={GLASS_PANEL_STYLE}
                 >
+                  <SectionMediaBackdrop url={bestSection.image} urls={bestSection.images} roundedClass="rounded-[1.75rem]" overlay={0.5} />
                   <div className="flex items-start justify-between mb-5">
                     <div>
-                      <div className="flex items-center mb-1.5">
-                        <h2 className="font-black text-xl md:text-2xl text-gray-900 tracking-tight" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                      <div className="flex items-center gap-3 mb-1.5">
+                        <SectionBadge
+                          palette="amber"
+                          icon={<Flame size={13} strokeWidth={2.5} className="fill-white/30" />}
+                          label={lang === 'ar' ? 'الأكثر مبيعاً' : 'Top Vente'}
+                        />
+                        <h2 className="text-2xl md:text-3xl tracking-tight" style={glowingTitleStyle('amber')}>
                           {pickLocalized(bestSection.title_fr, bestSection.title_ar, lang, lang === 'ar' ? 'الأكثر مبيعًا' : 'Meilleures Ventes')}
                         </h2>
                       </div>
@@ -1000,25 +1262,32 @@ export function HomePage() {
                       <ChevronRight size={16} className="rtl:rotate-180" />
                     </Link>
                   </div>
-                  <div className={HOME_PRODUCT_GRID_CLASS}>
-                    {bestSellerProducts.slice(0, 8).map((product) => (
-                      <ProductCard key={product.id} product={product} />
-                    ))}
-                    {bestSellerProducts.length === 1 && (
-                      <DiscoverMoreCard href={asText(bestSection.cta_link) || '/shop?best_seller=true'} />
-                    )}
-                  </div>
+                  <ProductSectionDisplay
+                    sectionKey="best_sellers"
+                    products={bestSellerProducts}
+                    style={bestSection.style_variant || 'grid'}
+                    dir={dir as 'ltr' | 'rtl'}
+                    gridClassName={productsGridClass}
+                    discoverMoreHref={asText(bestSection.cta_link) || '/shop?best_seller=true'}
+                  />
                 </div>
               )}
             </div>
-          ) : null}
+            );
+          })()}
 
           {/* Bento Row 4: Trust Stats — configurable from admin */}
           {trustSection.enabled !== false && (
-            <div className="space-y-4">
+            <div className="relative isolate overflow-hidden rounded-[1.75rem] p-5 md:p-7 space-y-4" style={trustSection.image ? undefined : { background: 'transparent' }}>
+              <SectionMediaBackdrop url={trustSection.image} urls={trustSection.images} roundedClass="rounded-[1.75rem]" overlay={0.45} />
               {(trustSection.title_fr || trustSection.title_ar) && (
-                <div className="text-center">
-                  <h2 className="font-black text-2xl md:text-3xl text-gray-900 mb-1" style={{ fontFamily: 'Montserrat, sans-serif', color: theme.primary_color }}>
+                <div className="flex flex-col items-center text-center gap-2">
+                  <SectionBadge
+                    palette="emerald"
+                    icon={<Shield size={13} strokeWidth={2.5} className="fill-white/20" />}
+                    label={lang === 'ar' ? 'ثقة' : 'Confiance'}
+                  />
+                  <h2 className="text-2xl md:text-3xl tracking-tight" style={glowingTitleStyle('emerald')}>
                     {pickLocalized(trustSection.title_fr, trustSection.title_ar, lang, lang === 'ar' ? 'لماذا نحن' : 'Pourquoi nous choisir')}
                   </h2>
                   {(trustSection.subtitle_fr || trustSection.subtitle_ar) && (
@@ -1091,15 +1360,21 @@ export function HomePage() {
             const goNext = () => setTestimonialIndex((prev) => (prev + 1) % total);
             return (
               <div
-                className="rounded-[1.75rem] p-6 md:p-10"
+                className="relative isolate overflow-hidden rounded-[1.75rem] p-6 md:p-10"
                 style={{
                   background: 'rgba(255,255,255,0.78)',
                   backdropFilter: 'blur(20px)',
                   boxShadow: '0 20px 60px -10px rgba(30,80,140,0.10)',
                 }}
               >
-                <div className="text-center mb-6 md:mb-8">
-                  <h2 className="font-black text-2xl md:text-3xl text-gray-900 mb-2" style={{ fontFamily: 'Montserrat, sans-serif', color: theme.primary_color }}>
+                <SectionMediaBackdrop url={testimonialsSection.image} urls={testimonialsSection.images} roundedClass="rounded-[1.75rem]" overlay={0.35} />
+                <div className="relative flex flex-col items-center text-center gap-2 mb-6 md:mb-8">
+                  <SectionBadge
+                    palette="violet"
+                    icon={<Quote size={13} strokeWidth={2.5} className="fill-white/20" />}
+                    label={lang === 'ar' ? 'شهادات' : 'Avis'}
+                  />
+                  <h2 className="text-2xl md:text-3xl tracking-tight" style={glowingTitleStyle('violet')}>
                     {pickLocalized(testimonialsSection.title_fr, testimonialsSection.title_ar, lang, lang === 'ar' ? 'يثقون بنا' : 'Ils nous font confiance')}
                   </h2>
                   {(testimonialsSection.subtitle_fr || testimonialsSection.subtitle_ar) && (
@@ -1199,17 +1474,21 @@ export function HomePage() {
           {/* Wholesale CTA — homepage conversion block (separate from /wholesale page) */}
           {showWholesaleSection && (
             <div
-              className="rounded-[1.75rem] overflow-hidden relative"
+              className="rounded-[1.75rem] overflow-hidden relative isolate"
               style={{ background: `linear-gradient(135deg, ${theme.primary_color || ETHEREAL_SECONDARY}, ${theme.secondary_color || '#0f3853'})` }}
             >
+              <SectionMediaBackdrop url={wholesaleSection.image} urls={wholesaleSection.images} roundedClass="rounded-[1.75rem]" overlay={0.55} />
               {/* Decorative blobs inside */}
               <div className="absolute top-0 right-0 w-64 h-64 rounded-full mix-blend-screen blur-3xl opacity-20 pointer-events-none" style={{ background: `radial-gradient(circle,${ETHEREAL_PRIMARY},transparent)`, transform: 'translate(30%,-30%)' }} aria-hidden />
               <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full mix-blend-screen blur-3xl opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle,#FFD700,transparent)', transform: 'translate(-30%,30%)' }} aria-hidden />
 
               <div className="relative z-10 px-7 py-10 md:px-14 md:py-14 text-center">
-                <div className="inline-flex items-center gap-2 mb-5 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest text-white"
-                  style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)' }}>
-                  {lang === 'ar' ? '🏢 فضاء الجملة' : '🏢 Espace B2B'}
+                <div className="inline-block mb-5">
+                  <SectionBadge
+                    palette="slate"
+                    icon={<Briefcase size={13} strokeWidth={2.5} />}
+                    label={lang === 'ar' ? 'فضاء B2B' : 'Espace B2B'}
+                  />
                 </div>
                 <h2
                   className="font-black text-2xl md:text-4xl lg:text-5xl text-white mb-4 leading-tight tracking-tight"
@@ -1239,10 +1518,11 @@ export function HomePage() {
           {/* Newsletter */}
           {newsletterSection.enabled !== false && (
             <div
-              className="rounded-[1.75rem] p-6 md:p-8"
+              className="relative isolate overflow-hidden rounded-[1.75rem] p-6 md:p-8"
               style={GLASS_PANEL_STYLE}
             >
-              <div className="flex flex-col md:flex-row md:items-center gap-5 md:gap-8">
+              <SectionMediaBackdrop url={newsletterSection.image} urls={newsletterSection.images} roundedClass="rounded-[1.75rem]" overlay={0.4} />
+              <div className="relative flex flex-col md:flex-row md:items-center gap-5 md:gap-8">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xl">📩</span>

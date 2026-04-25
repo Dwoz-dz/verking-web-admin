@@ -18,6 +18,18 @@ import { AdminContent } from "./pages/admin/AdminContent";
 import { AdminCustomers } from "./pages/admin/AdminCustomers";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { AdminHomepage } from "./pages/admin/AdminHomepage";
+import HomeLayout from "./pages/admin/home/HomeLayout";
+import HomeHub from "./pages/admin/home/HomeHub";
+import HeroSection from "./pages/admin/home/HeroSection";
+import CategoriesSection from "./pages/admin/home/CategoriesSection";
+import PromotionsSection from "./pages/admin/home/PromotionsSection";
+import BestSellersSection from "./pages/admin/home/BestSellersSection";
+import NouveautesSection from "./pages/admin/home/NouveautesSection";
+import VedettesSection from "./pages/admin/home/VedettesSection";
+import ConfianceSection from "./pages/admin/home/ConfianceSection";
+import TemoignagesSection from "./pages/admin/home/TemoignagesSection";
+import NewsletterSection from "./pages/admin/home/NewsletterSection";
+import WholesaleHomeSection from "./pages/admin/home/WholesaleSection";
 import { AdminMedia } from "./pages/admin/AdminMedia";
 import { AdminOrders } from "./pages/admin/AdminOrders";
 import { AdminProducts } from "./pages/admin/AdminProducts";
@@ -64,6 +76,23 @@ export const router = createBrowserRouter([
       { path: "wholesale", Component: AdminWholesale },
       { path: "media", Component: AdminMedia },
       { path: "homepage", Component: AdminHomepage },
+      {
+        path: "home",
+        Component: HomeLayout,
+        children: [
+          { index: true, Component: HomeHub },
+          { path: "hero", Component: HeroSection },
+          { path: "categories", Component: CategoriesSection },
+          { path: "promotions", Component: PromotionsSection },
+          { path: "best-sellers", Component: BestSellersSection },
+          { path: "nouveautes", Component: NouveautesSection },
+          { path: "produits-vedettes", Component: VedettesSection },
+          { path: "confiance", Component: ConfianceSection },
+          { path: "temoignages", Component: TemoignagesSection },
+          { path: "newsletter", Component: NewsletterSection },
+          { path: "wholesale", Component: WholesaleHomeSection },
+        ],
+      },
       { path: "banners", Component: AdminBanners },
       { path: "theme", Component: AdminTheme },
       { path: "content", Component: AdminContent },

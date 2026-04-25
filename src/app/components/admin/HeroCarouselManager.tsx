@@ -35,6 +35,8 @@ import {
   HeroMediaType,
   HeroBgMode,
   HeroOverlayMode,
+  HeroZone,
+  HERO_ZONES,
 } from '../../lib/heroSlidesApi';
 import { subscribeRealtimeResources } from '../../lib/realtimeLiveSync';
 import {
@@ -104,7 +106,7 @@ type DraftSlide = Omit<HeroSlide, 'id' | 'created_at' | 'updated_at'> & {
   id: string | null;
 };
 
-function newDraft(position: number): DraftSlide {
+function newDraft(position: number, zone: HeroZone = 'main'): DraftSlide {
   return {
     id: null,
     position,
@@ -122,8 +124,23 @@ function newDraft(position: number): DraftSlide {
     cta_label_ar: '',
     cta_url: '/shop',
     text_panel: { ...DEFAULT_HERO_TEXT_PANEL },
+    zone,
   };
 }
+
+const ZONE_OPTIONS: { value: HeroZone; label: string; hint: string }[] = [
+  { value: 'main', label: 'Principal (grand)', hint: 'Bannière centrale large à gauche' },
+  { value: 'side_1', label: 'Latéral 1 (haut)', hint: 'Bandeau droit en haut' },
+  { value: 'side_2', label: 'Latéral 2 (milieu)', hint: 'Bandeau droit au milieu' },
+  { value: 'side_3', label: 'Latéral 3 (bas)', hint: 'Bandeau droit en bas' },
+];
+
+const ZONE_LABEL: Record<HeroZone, string> = {
+  main: 'Principal',
+  side_1: 'Latéral 1',
+  side_2: 'Latéral 2',
+  side_3: 'Latéral 3',
+};
 
 const DURATION_PRESETS = [
   { ms: 3000, label: '3 s' },
@@ -329,8 +346,13 @@ export function HeroCarouselManager({
     return subscribeRealtimeResources(['hero_slides'], () => { load(); });
   }, [token, load]);
 
-  const handleAdd = () => {
-    setEditing(newDraft(slides.length));
+  const handleAdd = (zone: HeroZone = 'main') => {
+    // Position is per-zone (the upsert RPC computes the next free
+    // position inside the chosen zone server-side when we pass null),
+    // but we still pre-fill with the zone's current count so the
+    // optimistic UI sort stays sensible until the row is saved.
+    const inZone = slides.filter((s) => s.zone === zone).length;
+    setEditing(newDraft(inZone, zone));
   };
 
   const handleEdit = (slide: HeroSlide) => {
@@ -454,14 +476,14 @@ export function HeroCarouselManager({
           </button>
           <button
             type="button"
-            onClick={handleAdd}
+            onClick={() => handleAdd('main')}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-black uppercase tracking-widest text-white transition hover:scale-[1.03]"
             style={{
               background: 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 50%, #4f46e5 100%)',
               boxShadow: '0 10px 22px -8px rgba(139,92,246,0.55)',
             }}
           >
-            <Plus size={14} /> Ajouter
+            <Plus size={14} /> Ajouter (Principal)
           </button>
         </div>
       </motion.div>
@@ -480,7 +502,34 @@ export function HeroCarouselManager({
         />
       ) : null}
 
-      {/* Slides list */}
+      {/* Bento layout legend — quick visual reminder of what each zone
+          maps to on the storefront, so admins don't have to publish-and-
+          check to learn which slot they're editing. */}
+      <div className="rounded-2xl px-4 py-3" style={GLASS_PANEL}>
+        <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2">
+          Bento du Hero — disposition sur la homepage
+        </p>
+        <div className="flex flex-wrap gap-2 text-[11px] font-bold text-slate-700">
+          {ZONE_OPTIONS.map((z) => {
+            const count = slides.filter((s) => s.zone === z.value).length;
+            const activeCount = slides.filter((s) => s.zone === z.value && s.is_active).length;
+            return (
+              <span
+                key={z.value}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/65 border border-slate-200"
+                title={z.hint}
+              >
+                <span className="font-black text-indigo-700">{z.label}</span>
+                <span className="text-slate-500">— {activeCount}/{count} active{count > 1 ? 's' : ''}</span>
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Slides grouped by zone — each zone has its own "+ Ajouter"
+          button so the admin can grow exactly the slot they're working
+          on without dropping into the modal first to pick a zone. */}
       {loading ? (
         <div className="text-slate-500 text-sm font-medium p-5">Chargement des slides…</div>
       ) : slides.length === 0 ? (
@@ -495,8 +544,37 @@ export function HeroCarouselManager({
           </p>
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {slides.map((slide, idx) => (
+        <div className="space-y-5">
+          {ZONE_OPTIONS.map((zoneOpt) => {
+            const zoneSlides = slides.filter((s) => s.zone === zoneOpt.value);
+            return (
+              <div key={zoneOpt.value} className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-black text-sm text-slate-900">{zoneOpt.label}</h3>
+                    <p className="text-[11px] text-slate-500">{zoneOpt.hint}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAdd(zoneOpt.value)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition"
+                  >
+                    <Plus size={12} /> Ajouter ici
+                  </button>
+                </div>
+                {zoneSlides.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-white/50 px-4 py-5 text-center text-[12px] font-medium text-slate-500">
+                    Aucune slide dans ce slot — cliquez « Ajouter ici » pour créer la première.
+                  </div>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {zoneSlides.map((slide) => {
+                      // Compute the slide's index within the *full* list
+                      // so the move buttons stay in sync with the
+                      // server-side reorder RPC (which expects the
+                      // global ordering, not the zone-local one).
+                      const idx = slides.findIndex((s) => s.id === slide.id);
+                      return (
             <motion.div
               key={slide.id}
               layout
@@ -528,9 +606,14 @@ export function HeroCarouselManager({
                     <ImageIcon size={28} />
                   </div>
                 )}
-                <div className="absolute top-2 start-2 flex items-center gap-1 px-2 py-1 rounded-full bg-white/85 text-[10px] font-black uppercase tracking-widest">
-                  {slide.media_type === 'video' ? <Film size={10} /> : <ImageIcon size={10} />}
-                  {slide.media_type}
+                <div className="absolute top-2 start-2 flex items-center gap-1 flex-wrap">
+                  <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-white/85 text-[10px] font-black uppercase tracking-widest">
+                    {slide.media_type === 'video' ? <Film size={10} /> : <ImageIcon size={10} />}
+                    {slide.media_type}
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-indigo-600/90 text-white text-[10px] font-black uppercase tracking-widest">
+                    {ZONE_LABEL[slide.zone]}
+                  </span>
                 </div>
                 <div className={`absolute top-2 end-2 px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${slide.is_active ? 'bg-emerald-500 text-white' : 'bg-slate-400 text-white'}`}>
                   {slide.is_active ? 'Actif' : 'Masqué'}
@@ -571,7 +654,13 @@ export function HeroCarouselManager({
                 </div>
               </div>
             </motion.div>
-          ))}
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -602,6 +691,25 @@ export function HeroCarouselManager({
                 <button type="button" onClick={() => setEditing(null)} className="p-2 rounded-full hover:bg-slate-100" aria-label="Fermer">
                   <X size={18} />
                 </button>
+              </div>
+
+              {/* Zone — which bento slot this slide is rendered in.
+                  Changing this re-files the slide into another slot
+                  on the next save. The list view above is grouped by
+                  zone so the move shows up immediately after publish. */}
+              <div className="mb-3">
+                <Label>Emplacement (bento du Hero)</Label>
+                <select
+                  value={editing.zone}
+                  onChange={(e) => patchDraft({ zone: e.target.value as HeroZone })}
+                  className={INPUT_CLS}
+                >
+                  {ZONE_OPTIONS.map((z) => (
+                    <option key={z.value} value={z.value}>
+                      {z.label} — {z.hint}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Status + media type */}
