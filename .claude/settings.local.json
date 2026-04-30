@@ -38,7 +38,9 @@
       "Bash(cp \"C:/Users/mahdi/Figmaweb-main/src/app/lib/realtimeLiveSync.ts\" \"C:/Users/mahdi/Figmaweb-main/.claude/worktrees/vigorous-nash-e0bab2/src/app/lib/\")",
       "Bash(cp \"C:/Users/mahdi/Figmaweb-main/src/app/lib/supabaseClient.ts\" \"C:/Users/mahdi/Figmaweb-main/.claude/worktrees/vigorous-nash-e0bab2/src/app/lib/\")",
       "Bash(cp \"C:/Users/mahdi/Figmaweb-main/src/app/lib/wishlist.ts\" \"C:/Users/mahdi/Figmaweb-main/.claude/worktrees/vigorous-nash-e0bab2/src/app/lib/\")",
-      "mcp__34b48978-36c4-40ee-b7b3-7889c0f48dad__list_projects"
+      "mcp__34b48978-36c4-40ee-b7b3-7889c0f48dad__list_projects",
+      "Bash(grep -oE '\\\\[[0-9]+\\\\.[0-9]+\\\\] \\(PUT|GET\\) [^\\\\\\\\]+homepage-config[^→]+→ [0-9]+' \"C:/Users/mahdi/.claude/projects/C--Dev-VERKING-Figmaweb-main/8195087f-b6d8-40f8-9ccf-f520c804dc5f/tool-results/mcp-Claude_Preview-preview_network-1777128944488.txt\")",
+      "Bash(grep -oE '\\\\[[0-9]+\\\\.[0-9]+\\\\] \\(PUT|GET\\) [^\\\\\\\\]+homepage-config[^→]+→ [0-9]+' \"C:/Users/mahdi/.claude/projects/C--Dev-VERKING-Figmaweb-main/8195087f-b6d8-40f8-9ccf-f520c804dc5f/tool-results/mcp-Claude_Preview-preview_network-1777129043623.txt\")"
     ]
   }
 }

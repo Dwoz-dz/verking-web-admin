@@ -244,14 +244,23 @@ export function AdminStockManager() {
 
   // Live sync — any stock mutation (admin or order-driven) hits the
   // products table, and the trigger writes a row to stock_movements.
-  // Both tables are watched by realtimeLiveSync.
+  // Both tables are watched by realtimeLiveSync. Including 'stocks'
+  // ensures we also refresh when an audit-trail row is inserted via
+  // RPC (e.g. another admin tab adjusting stock).
   useEffect(() => {
     const unsubscribe = subscribeRealtimeResources(
-      ['products', 'categories', 'orders'],
-      () => loadProductsAndCategories(true),
+      ['products', 'categories', 'orders', 'stocks'],
+      (event) => {
+        loadProductsAndCategories(true);
+        // If the history drawer is open, refresh movements too so the
+        // ledger updates live alongside the products grid.
+        if (event.resource === 'stocks' && historyOpen) {
+          loadMovements(historyScope?.id);
+        }
+      },
     );
     return unsubscribe;
-  }, [loadProductsAndCategories]);
+  }, [loadProductsAndCategories, loadMovements, historyOpen, historyScope]);
 
   // ── Computed ──
   const categoryById = useMemo(() => {

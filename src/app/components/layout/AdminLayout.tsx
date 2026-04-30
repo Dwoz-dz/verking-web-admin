@@ -20,6 +20,7 @@ import {
     Settings,
     Shield,
     ShoppingCart,
+    Smartphone,
     Sparkles,
     Sun,
     Tag,
@@ -33,6 +34,7 @@ import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { Toaster } from "sonner";
 import { AdminUIProvider, useAdminUI } from "../../context/AdminUIContext";
 import { useAuth } from "../../context/AuthContext";
+import { SessionExpiredModal } from "../admin/SessionExpiredModal";
 
 /**
  * Every nav item carries its own accent palette so the sidebar reads
@@ -158,6 +160,13 @@ const navItems: Array<{
     badge: "NEW",
     accent: { from: "#10B981", to: "#0891B2", tint: "rgba(16,185,129,0.22)", active: "#34D399" },
     special: "stock",
+  },
+  {
+    to: "/admin/mobile",
+    icon: Smartphone,
+    label: "Gestionnaire Mobile",
+    badge: "BETA",
+    accent: { from: "#2D7DD2", to: "#1A3C6E", tint: "rgba(45,125,210,0.22)", active: "#60A5FA" },
   },
 ];
 
@@ -764,6 +773,11 @@ function AdminPanelInner() {
           <Outlet />
         </div>
       </main>
+
+      {/* Phase 1.5 — graceful re-login when admin session expires
+          mid-edit. Replaces the old "redirect to /admin/login" yank
+          that fired on every transient 401 and lost in-progress work. */}
+      <SessionExpiredModal />
 
       <Toaster position="top-right" richColors closeButton />
     </div>

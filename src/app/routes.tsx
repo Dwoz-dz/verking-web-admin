@@ -38,6 +38,25 @@ import { AdminTheme } from "./pages/admin/AdminTheme";
 import { AdminWholesale } from "./pages/admin/AdminWholesale";
 import { Admin3DParams } from "./pages/admin/Admin3DParams";
 import { AdminStockManager } from "./pages/admin/AdminStockManager";
+import MobileLayout from "./pages/admin/mobile/MobileLayout";
+import MobileHub from "./pages/admin/mobile/MobileHub";
+import MobileDashboard from "./pages/admin/mobile/MobileDashboard";
+import MobileBannersManager from "./pages/admin/mobile/MobileBannersManager";
+import MobileHomeBuilder from "./pages/admin/mobile/MobileHomeBuilder";
+import MobileTheme from "./pages/admin/mobile/MobileTheme";
+import MobileCartSettings from "./pages/admin/mobile/MobileCartSettings";
+import MobileShippingManager from "./pages/admin/mobile/MobileShippingManager";
+import MobileCouponsManager from "./pages/admin/mobile/MobileCouponsManager";
+import MobileFlashSalesManager from "./pages/admin/mobile/MobileFlashSalesManager";
+import MobileThemedPagesManager from "./pages/admin/mobile/MobileThemedPagesManager";
+import MobileFabPromotionsManager from "./pages/admin/mobile/MobileFabPromotionsManager";
+import MobileEmptyStatesManager from "./pages/admin/mobile/MobileEmptyStatesManager";
+import MobileLoyaltyManager from "./pages/admin/mobile/MobileLoyaltyManager";
+import MobileSchoolManager from "./pages/admin/mobile/MobileSchoolManager";
+import MobileSearchManager from "./pages/admin/mobile/MobileSearchManager";
+import MobilePushManager from "./pages/admin/mobile/MobilePushManager";
+import MobileQuickChipsManager from "./pages/admin/mobile/MobileQuickChipsManager";
+import MobileUsersManager from "./pages/admin/mobile/MobileUsersManager";
 import { VirtualStore } from "./pages/experience/VirtualStore";
 
 export const router = createBrowserRouter([
@@ -99,6 +118,30 @@ export const router = createBrowserRouter([
       { path: "settings", Component: AdminSettings },
       { path: "3d-params", Component: Admin3DParams },
       { path: "stock", Component: AdminStockManager },
+      {
+        path: "mobile",
+        Component: MobileLayout,
+        children: [
+          { index: true, Component: MobileHub },
+          { path: "dashboard", Component: MobileDashboard },
+          { path: "banners",   Component: MobileBannersManager },
+          { path: "home",      Component: MobileHomeBuilder },
+          { path: "theme",     Component: MobileTheme },
+          { path: "cart",      Component: MobileCartSettings },
+          { path: "shipping",  Component: MobileShippingManager },
+          { path: "coupons",   Component: MobileCouponsManager },
+          { path: "flash-sales", Component: MobileFlashSalesManager },
+          { path: "themed-pages", Component: MobileThemedPagesManager },
+          { path: "fab-promos",   Component: MobileFabPromotionsManager },
+          { path: "empty-states", Component: MobileEmptyStatesManager },
+          { path: "loyalty",      Component: MobileLoyaltyManager },
+          { path: "school",       Component: MobileSchoolManager },
+          { path: "search",       Component: MobileSearchManager },
+          { path: "push",         Component: MobilePushManager },
+          { path: "quick-chips",  Component: MobileQuickChipsManager },
+          { path: "users",        Component: MobileUsersManager },
+        ],
+      },
     ],
   },
 ]);

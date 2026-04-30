@@ -14,6 +14,7 @@ import {
   Monitor,
 } from 'lucide-react';
 import { adminApi, api, API_BASE, apiHeaders } from '../../lib/api';
+import { supabaseClient } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { useAdminUI } from '../../context/AdminUIContext';
 import { MediaPickerModal } from '../../components/admin/MediaPickerModal';
@@ -212,8 +213,19 @@ export function AdminBanners() {
   const loadBanners = async () => {
     if (!token) return;
     try {
-      const response = await adminApi.get('/banners/all', token);
-      const items = Array.isArray(response?.banners) ? response.banners : [];
+      // Phase 12.e — read directly via banners_list_admin RPC.
+      // Falls back to the legacy /banners/all endpoint if the RPC
+      // call fails (e.g. older deployments without the migration).
+      let items: Record<string, unknown>[] = [];
+      try {
+        const { data, error } = await supabaseClient.rpc('banners_list_admin', { p_token: token });
+        if (error) throw error;
+        items = Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+      } catch (rpcErr) {
+        console.warn('[admin-banners] RPC failed, falling back to legacy:', rpcErr);
+        const response = await adminApi.get('/banners/all', token);
+        items = Array.isArray(response?.banners) ? response.banners : [];
+      }
       const normalized = items.map((item: any, index: number) => ({
         id: String(item.id || ''),
         title_fr: normalizeSafeText(item.title_fr, ''),
@@ -235,7 +247,9 @@ export function AdminBanners() {
         ),
         link_url: normalizeUrlOrPath(item.link_url || item.link, '/shop'),
         is_active: item.is_active !== false,
-        order: normalizeOrder(item.order, index, 9999),
+        // Postgres column is `sort_order`; legacy `/banners/all` payload
+        // may still return `order`. Prefer the table column.
+        order: normalizeOrder(item.sort_order ?? item.order, index, 9999),
         placement: item.placement || 'homepage_hero',
         banner_type: item.banner_type || 'hero',
         start_at: normalizeOptionalDateTime(item.start_at),
@@ -388,18 +402,31 @@ export function AdminBanners() {
 
     setSubmitting(true);
     try {
-      if (modal === 'add') {
-        await adminApi.post('/banners', payload, token);
-        toast.success('Bannière créée.');
-      } else {
-        await adminApi.put(`/banners/${payload.id}`, payload, token);
-        toast.success('Bannière mise à jour.');
+      // Phase 12.e — prefer SECURITY DEFINER RPC. The patch object
+      // mirrors the legacy payload shape, but we add `sort_order` so
+      // the RPC's typed extraction picks it up cleanly.
+      const rpcPatch = { ...payload, sort_order: payload.order };
+      try {
+        const { error } = await supabaseClient.rpc('banners_upsert_admin', {
+          p_token: token,
+          p_id: modal === 'add' ? null : (payload.id ?? null),
+          p_patch: rpcPatch,
+        });
+        if (error) throw error;
+      } catch (rpcErr) {
+        console.warn('[admin-banners] RPC save failed, falling back:', rpcErr);
+        if (modal === 'add') {
+          await adminApi.post('/banners', payload, token);
+        } else {
+          await adminApi.put(`/banners/${payload.id}`, payload, token);
+        }
       }
+      toast.success(modal === 'add' ? 'Bannière créée.' : 'Bannière mise à jour.');
       closeModal();
       await loadBanners();
     } catch (error) {
       console.error(error);
-      toast.error('Échec de sauvegarde.');
+      toast.error(error instanceof Error ? `Échec de sauvegarde: ${error.message}` : 'Échec de sauvegarde.');
     } finally {
       setSubmitting(false);
     }
@@ -409,12 +436,21 @@ export function AdminBanners() {
     if (!token) return;
     if (!window.confirm(`Supprimer la bannière "${item.title_fr}" ?`)) return;
     try {
-      await adminApi.del(`/banners/${item.id}`, token);
+      try {
+        const { error } = await supabaseClient.rpc('banners_delete_admin', {
+          p_token: token,
+          p_id: item.id,
+        });
+        if (error) throw error;
+      } catch (rpcErr) {
+        console.warn('[admin-banners] RPC delete failed, falling back:', rpcErr);
+        await adminApi.del(`/banners/${item.id}`, token);
+      }
       toast.success('Bannière supprimée.');
       await loadBanners();
     } catch (error) {
       console.error(error);
-      toast.error('Suppression impossible.');
+      toast.error(error instanceof Error ? `Suppression: ${error.message}` : 'Suppression impossible.');
     }
   };
 
@@ -423,11 +459,38 @@ export function AdminBanners() {
     const next = !item.is_active;
     setBanners((prev) => prev.map((b) => b.id === item.id ? { ...b, is_active: next } : b));
     try {
-      await adminApi.put(`/banners/${item.id}`, { is_active: next }, token);
+      // The RPC requires title_fr + image, so we pass the existing
+      // values through to keep the row valid even on a "toggle only"
+      // flow. The legacy /banners/:id endpoint accepts a partial
+      // patch — we keep it as the fallback.
+      try {
+        const { error } = await supabaseClient.rpc('banners_upsert_admin', {
+          p_token: token,
+          p_id: item.id,
+          p_patch: {
+            title_fr: item.title_fr,
+            title_ar: item.title_ar,
+            desktop_image: item.desktop_image || item.image,
+            mobile_image: item.mobile_image || item.desktop_image || item.image,
+            image: item.image || item.desktop_image,
+            link: item.link,
+            placement: item.placement,
+            banner_type: item.banner_type,
+            sort_order: item.order,
+            is_active: next,
+            start_at: item.start_at,
+            end_at: item.end_at,
+          },
+        });
+        if (error) throw error;
+      } catch (rpcErr) {
+        console.warn('[admin-banners] RPC toggle failed, falling back:', rpcErr);
+        await adminApi.put(`/banners/${item.id}`, { is_active: next }, token);
+      }
     } catch (error) {
       console.error(error);
       setBanners((prev) => prev.map((b) => b.id === item.id ? { ...b, is_active: item.is_active } : b));
-      toast.error('Impossible de changer le statut.');
+      toast.error(error instanceof Error ? `Statut: ${error.message}` : 'Impossible de changer le statut.');
     }
   };
 

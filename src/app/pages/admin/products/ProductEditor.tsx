@@ -21,13 +21,107 @@ import {
   Save,
   Search,
   Check,
+  AlertTriangle,
+  ImageOff,
+  Sparkles,
 } from 'lucide-react';
 import { useAdminUI } from '../../../context/AdminUIContext';
 import { useAuth } from '../../../context/AuthContext';
 import { adminApi } from '../../../lib/api';
 import { Product, Category, ActiveTab } from './types';
 import { Toggle, StockBadge } from './ProductRowComponents';
+import { ProductCard } from '../../../components/ProductCard';
 import { toast } from 'sonner';
+
+/**
+ * Smart Product Studio helpers.
+ *
+ * Readiness: a UI-only completeness signal so admins see at a glance
+ * whether the product is ready to publish. Non-blocking — the real save
+ * flow still validates on submit.
+ *
+ * Tab status: per-tab red/amber/green dot. Red = a required field is
+ * missing on that tab, amber = optional-but-useful fields empty, green =
+ * tab is complete.
+ */
+type TabStatus = 'empty' | 'partial' | 'complete' | 'error';
+
+function computeReadiness(p: Partial<Product>): { score: number; checks: Array<{ key: string; label: string; done: boolean; required: boolean }> } {
+  const hasName = !!(p.name_fr && p.name_fr.trim()) || !!(p.name_ar && p.name_ar.trim());
+  const hasCategory = !!p.category_id;
+  const hasPrice = typeof p.price === 'number' && p.price > 0;
+  const hasImage = Array.isArray(p.images) && p.images.length > 0;
+  const hasStock = typeof p.stock === 'number' && p.stock >= 0;
+  const isActive = p.is_active !== false;
+  const hasSeo = !!(p.meta_title || p.meta_description);
+
+  const checks = [
+    { key: 'name',     label: 'Nom FR/AR',         done: hasName,     required: true },
+    { key: 'category', label: 'Catégorie',          done: hasCategory, required: true },
+    { key: 'price',    label: 'Prix de vente',      done: hasPrice,    required: true },
+    { key: 'image',    label: 'Au moins une image', done: hasImage,    required: true },
+    { key: 'stock',    label: 'Stock renseigné',    done: hasStock,    required: true },
+    { key: 'active',   label: 'Statut actif',       done: isActive,    required: false },
+    { key: 'seo',      label: 'SEO (recommandé)',   done: hasSeo,      required: false },
+  ];
+  const weighted = checks.reduce((acc, c) => acc + (c.done ? (c.required ? 15 : 5) : 0), 0);
+  const maxWeight = checks.reduce((acc, c) => acc + (c.required ? 15 : 5), 0);
+  const score = Math.round((weighted / maxWeight) * 100);
+  return { score, checks };
+}
+
+function tabStatus(tab: ActiveTab, p: Partial<Product>): TabStatus {
+  switch (tab) {
+    case 'info': {
+      const hasName = !!(p.name_fr && p.name_fr.trim()) || !!(p.name_ar && p.name_ar.trim());
+      const hasCategory = !!p.category_id;
+      if (!hasName || !hasCategory) return 'error';
+      const hasDesc = !!(p.description_fr || p.description_ar);
+      return hasDesc ? 'complete' : 'partial';
+    }
+    case 'pricing': {
+      const hasPrice = typeof p.price === 'number' && p.price > 0;
+      if (!hasPrice) return 'error';
+      const bad = typeof p.sale_price === 'number' && typeof p.price === 'number' && p.sale_price > p.price;
+      if (bad) return 'error';
+      const hasStock = typeof p.stock === 'number' && p.stock >= 0;
+      return hasStock ? 'complete' : 'partial';
+    }
+    case 'media': {
+      const hasImage = Array.isArray(p.images) && p.images.length > 0;
+      return hasImage ? 'complete' : 'error';
+    }
+    case 'display': {
+      const anyPlacement =
+        !!p.show_on_homepage || !!p.show_in_featured || !!p.show_in_new_arrivals ||
+        !!p.show_in_best_sellers || !!p.show_in_promotions;
+      return anyPlacement ? 'complete' : 'partial';
+    }
+    case 'seo': {
+      const hasSeo = !!(p.meta_title || p.meta_description);
+      return hasSeo ? 'complete' : 'empty';
+    }
+    case 'analytics':
+      return 'empty';
+    default:
+      return 'empty';
+  }
+}
+
+/** Human-readable list of placements derived from the flags — used
+ *  both by the "Will appear in" summary in the Affichage tab AND by
+ *  admins to confirm the product's storefront visibility. */
+function computePlacements(p: Partial<Product>): string[] {
+  const out: string[] = [];
+  if (p.is_active === false) return ['⚠️ Inactif — masqué partout'];
+  if (p.show_on_homepage) out.push('Page d’accueil');
+  if (p.show_in_featured || p.is_featured) out.push('Produits vedettes');
+  if (p.show_in_new_arrivals || p.is_new) out.push('Nouveautés');
+  if (p.show_in_best_sellers || p.is_best_seller) out.push('Best sellers');
+  if (p.show_in_promotions || p.is_promo) out.push('Promotions');
+  out.push('Boutique');
+  return Array.from(new Set(out));
+}
 
 type InlineCategoryDraft = {
   name_fr: string;
@@ -164,46 +258,112 @@ export function ProductEditor(props: ProductEditorProps) {
     { id: 'analytics', label: 'Analytics', icon: BarChart2 },
   ];
 
+  // Smart Product Studio: compute readiness + per-tab status once per render.
+  const readiness = useMemo(() => computeReadiness(current), [current]);
+  const placements = useMemo(() => computePlacements(current), [current]);
+  const statusByTab = useMemo(() => ({
+    info: tabStatus('info', current),
+    pricing: tabStatus('pricing', current),
+    media: tabStatus('media', current),
+    display: tabStatus('display', current),
+    seo: tabStatus('seo', current),
+    analytics: tabStatus('analytics', current),
+  }), [current]);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeEditor} />
 
-      <div className={`relative w-full max-w-4xl max-h-[90vh] ${t.card} border ${t.cardBorder} rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200`}>
-        <div className={`px-6 py-4 border-b ${t.divider} flex items-center justify-between shrink-0 bg-gradient-to-r ${isDark ? 'from-gray-900 to-gray-800' : 'from-white to-gray-50'}`}>
-          <div>
-            <h2 className={`text-xl font-black ${t.text} flex items-center gap-2`}>
-              <div className="w-8 h-8 rounded-lg bg-[#1A3C6E] flex items-center justify-center text-white">
-                {mode === 'add' ? <Plus size={18} /> : <Zap size={18} />}
-              </div>
-              {mode === 'add' ? 'Nouveau Produit' : 'Modifier Produit'}
-            </h2>
-            <p className={`text-xs ${t.textMuted} mt-1`}>Configurez les details, les prix et le placement du produit</p>
+      <div className={`relative w-full max-w-6xl max-h-[92vh] ${t.card} border ${t.cardBorder} rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200`}>
+        <div className={`px-6 py-4 border-b ${t.divider} shrink-0 bg-gradient-to-r ${isDark ? 'from-gray-900 to-gray-800' : 'from-white to-gray-50'}`}>
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className={`text-xl font-black ${t.text} flex items-center gap-2`}>
+                <div className="w-8 h-8 rounded-lg bg-[#1A3C6E] flex items-center justify-center text-white">
+                  {mode === 'add' ? <Plus size={18} /> : <Zap size={18} />}
+                </div>
+                {mode === 'add' ? 'Nouveau Produit' : 'Modifier Produit'}
+                <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-[#1A3C6E] to-[#2e5a94] px-2 py-0.5 text-[10px] font-black text-white">
+                  <Sparkles size={10} /> SMART STUDIO
+                </span>
+              </h2>
+              <p className={`text-xs ${t.textMuted} mt-1`}>
+                {readiness.score >= 85
+                  ? '✓ Produit prêt à publier'
+                  : readiness.score >= 60
+                  ? 'Quelques champs à compléter pour une fiche premium'
+                  : 'Remplissez les champs requis pour publier'}
+              </p>
+            </div>
+            <button onClick={closeEditor} className={`p-2 rounded-xl ${t.rowHover} ${t.textMuted} transition-colors shrink-0`}>
+              <X size={20} />
+            </button>
           </div>
-          <button onClick={closeEditor} className={`p-2 rounded-xl ${t.rowHover} ${t.textMuted} transition-colors`}>
-            <X size={20} />
-          </button>
+
+          {/* Readiness bar — live "Produit prêt à publier: XX%" signal.
+              Never blocks saving; admins see at a glance whether a fiche
+              is complete before they click Créer/Sauvegarder. */}
+          <div className="mt-3 flex items-center gap-3">
+            <div className={`flex-1 h-2 rounded-full overflow-hidden ${isDark ? 'bg-gray-800' : 'bg-gray-100'}`}>
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  readiness.score >= 85 ? 'bg-gradient-to-r from-emerald-500 to-green-500'
+                  : readiness.score >= 60 ? 'bg-gradient-to-r from-amber-400 to-orange-500'
+                  : 'bg-gradient-to-r from-red-400 to-rose-500'
+                }`}
+                style={{ width: `${readiness.score}%` }}
+              />
+            </div>
+            <span className={`shrink-0 text-xs font-black ${
+              readiness.score >= 85 ? 'text-emerald-600' : readiness.score >= 60 ? 'text-amber-600' : 'text-rose-600'
+            }`}>
+              {readiness.score}%
+            </span>
+          </div>
         </div>
 
         <div className={`px-2 py-1 flex items-center gap-1 border-b ${t.divider} shrink-0 overflow-x-auto no-scrollbar`}>
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-[#1A3C6E] text-white shadow-md' : `${t.textMuted} ${t.rowHover}`}`}
-            >
-              <tab.icon size={13} />
-              {tab.label}
-            </button>
-          ))}
+          {tabs.map(tab => {
+            const st = statusByTab[tab.id];
+            const dotColor =
+              st === 'complete' ? 'bg-emerald-500' :
+              st === 'error' ? 'bg-rose-500' :
+              st === 'partial' ? 'bg-amber-400' :
+              'bg-gray-300';
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-[#1A3C6E] text-white shadow-md' : `${t.textMuted} ${t.rowHover}`}`}
+                title={st === 'error' ? 'Champ(s) requis manquant(s)' : st === 'complete' ? 'OK' : st === 'partial' ? 'Partiellement rempli' : ''}
+              >
+                <tab.icon size={13} />
+                {tab.label}
+                <span className={`ms-1 inline-block h-1.5 w-1.5 rounded-full ${dotColor}`} aria-hidden />
+              </button>
+            );
+          })}
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-6 space-y-5">
+        {/* Two-column body: editor fields on the left, live product card
+            preview + readiness checks on the right. Stacks to one column
+            on screens below lg so the form stays usable on tablets. */}
+        <div className="flex-1 overflow-hidden">
+          <div className="grid h-full grid-cols-1 lg:grid-cols-[1fr_340px]">
+            <div className="overflow-y-auto">
+              <div className="p-6 space-y-5">
 
             {activeTab === 'info' && (
               <div className="space-y-5">
+                <div className={`p-3 rounded-2xl border ${t.cardBorder} ${isDark ? 'bg-blue-900/10' : 'bg-blue-50/50'} flex items-start gap-2`}>
+                  <Sparkles size={14} className="text-[#1A3C6E] mt-0.5 shrink-0" />
+                  <p className={`text-xs ${t.text}`}>
+                    <span className="font-black">Astuce : </span>
+                    commencez par choisir une catégorie, puis remplissez les noms et la description bilingues. La fiche sera validée dès que les champs requis sont remplis.
+                  </p>
+                </div>
                 <div>
                   <p className={`text-xs font-bold uppercase tracking-widest mb-4 ${t.textMuted} flex items-center gap-2`}>
                     <Globe size={12} /> Noms bilingues
@@ -424,9 +584,14 @@ export function ProductEditor(props: ProductEditorProps) {
                 )}
 
                 <div>
-                  <p className={`text-xs font-bold uppercase tracking-widest mb-4 ${t.textMuted} flex items-center gap-2`}>
-                    <ShoppingBag size={12} /> Gestion du stock
-                  </p>
+                  <div className="flex items-center justify-between mb-4">
+                    <p className={`text-xs font-bold uppercase tracking-widest ${t.textMuted} flex items-center gap-2`}>
+                      <ShoppingBag size={12} /> Gestion du stock
+                    </p>
+                    <p className={`text-[10px] ${t.textMuted}`}>
+                      Mouvements détaillés → <span className="font-black">Gestionnaire de stock</span>
+                    </p>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className={labelCls}>Quantite en stock *</label>
@@ -438,6 +603,21 @@ export function ProductEditor(props: ProductEditorProps) {
                     </div>
                   </div>
                 </div>
+
+                {/* Promo price sanity check — blocks bad configurations from
+                    getting to save. Non-invasive: we surface a warning, the
+                    admin fixes it before clicking Créer/Sauvegarder. */}
+                {typeof current.sale_price === 'number' && typeof current.price === 'number' && current.sale_price > current.price && (
+                  <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3">
+                    <AlertTriangle size={16} className="text-rose-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-black text-rose-800">Prix promo supérieur au prix de vente</p>
+                      <p className="text-[11px] text-rose-700 mt-0.5">
+                        Le prix promo doit être inférieur ou égal au prix de vente.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div className={`p-4 rounded-2xl border ${t.cardBorder} ${t.rowHover}`}>
                   <div className="flex items-center justify-between mb-3">
@@ -483,6 +663,17 @@ export function ProductEditor(props: ProductEditorProps) {
 
             {activeTab === 'media' && (
               <div className="space-y-5">
+                {(!Array.isArray(current.images) || current.images.length === 0) && (
+                  <div className="flex items-start gap-2 rounded-2xl border border-amber-300 bg-amber-50 p-3">
+                    <AlertTriangle size={16} className="text-amber-700 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-black text-amber-900">Aucune image assignée</p>
+                      <p className="text-[11px] text-amber-800 mt-0.5">
+                        Ajoutez au moins une image — le ProductCard sur la boutique a besoin d’une image pour s’afficher correctement.
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <div>
                   <p className={`text-xs font-bold uppercase tracking-widest mb-4 ${t.textMuted} flex items-center gap-2`}>
                     <Upload size={12} /> Upload d'images
@@ -647,13 +838,27 @@ export function ProductEditor(props: ProductEditorProps) {
                     <p className={`text-xs ${t.textMuted} mt-0.5`}>Controlez le placement sur le site et l'app.</p>
                   </div>
                 </div>
+
+                <div className={`p-4 rounded-2xl border ${t.cardBorder} bg-gradient-to-br from-white to-blue-50/40`}>
+                  <p className={`text-[11px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>
+                    Ce produit apparaitra dans
+                  </p>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {placements.map((p, i) => (
+                      <li key={i} className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-[11px] font-bold text-[#1A3C6E] shadow-sm ring-1 ring-black/5">
+                        <Check size={10} className="text-emerald-600" />
+                        {p}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
                 <div className="space-y-2">
                   {[
                     { key: 'show_on_homepage', badge: 'HOME', label: "Page d'accueil", desc: "Visible sur l'accueil" },
                     { key: 'show_in_featured', badge: 'VEDETTE', label: 'Section vedette', desc: 'Section "Produits vedettes"' },
-                    { key: 'show_in_new_arrivals', badge: 'NEW', label: 'Nouveautes', desc: 'Section "وصل حديثا"' },
-                    { key: 'show_in_best_sellers', badge: 'TOP', label: 'Meilleures ventes', desc: 'Section "الاكثر مبيعا"' },
-                    { key: 'show_in_promotions', badge: 'PROMO', label: 'Promotions', desc: 'Section "عروض خاصة"' },
+                    { key: 'show_in_new_arrivals', badge: 'NEW', label: 'Nouveautes', desc: 'Section wasal hadithan' },
+                    { key: 'show_in_best_sellers', badge: 'TOP', label: 'Meilleures ventes', desc: 'Section al-akthar mabi' },
+                    { key: 'show_in_promotions', badge: 'PROMO', label: 'Promotions', desc: 'Section promo' },
                   ].map(item => {
                     const val = !!current[item.key as keyof Product];
                     return (
@@ -676,21 +881,46 @@ export function ProductEditor(props: ProductEditorProps) {
             {activeTab === 'seo' && (
               <div className="space-y-5">
                 <div>
-                  <label className={labelCls}>Meta Title (titre SEO)</label>
-                  <input className={inputCls} value={current.meta_title || ''} onChange={e => field('meta_title', e.target.value)} maxLength={70} />
+                  <div className="flex items-center justify-between">
+                    <label className={labelCls}>Meta Title (titre SEO)</label>
+                    <span className={`text-[10px] font-bold ${((current.meta_title || '').length > 60) ? 'text-amber-600' : t.textMuted}`}>
+                      {(current.meta_title || '').length} / 70
+                    </span>
+                  </div>
+                  <input className={inputCls} value={current.meta_title || ''} onChange={e => field('meta_title', e.target.value)} maxLength={70} placeholder={current.name_fr ? `${current.name_fr} - Verking Scolaire` : 'Titre optimise pour Google'} />
                 </div>
                 <div>
-                  <label className={labelCls}>Meta Description</label>
-                  <textarea rows={3} className={`${inputCls} resize-none`} value={current.meta_description || ''} onChange={e => field('meta_description', e.target.value)} maxLength={160} />
+                  <div className="flex items-center justify-between">
+                    <label className={labelCls}>Meta Description</label>
+                    <span className={`text-[10px] font-bold ${((current.meta_description || '').length > 150) ? 'text-amber-600' : t.textMuted}`}>
+                      {(current.meta_description || '').length} / 160
+                    </span>
+                  </div>
+                  <textarea rows={3} className={`${inputCls} resize-none`} value={current.meta_description || ''} onChange={e => field('meta_description', e.target.value)} maxLength={160} placeholder="Phrase courte vendeuse - visible dans les resultats Google." />
                 </div>
-                <div className={`p-4 rounded-2xl border ${t.cardBorder}`}>
-                  <p className={`text-xs font-bold mb-3 ${t.textMuted} uppercase tracking-wider`}>Apercu Google</p>
-                  <div className="text-blue-600 text-base font-medium truncate">{current.meta_title || current.name_fr || 'Titre du produit'}</div>
-                  <div className={`text-xs ${t.textMuted} leading-relaxed line-clamp-2`}>{current.meta_description || current.description_fr || 'Description...'}</div>
+
+                <div className={`rounded-2xl border ${t.cardBorder} p-4 bg-white`}>
+                  <p className={`text-[10px] font-black mb-2 ${t.textMuted} uppercase tracking-wider flex items-center gap-1.5`}>
+                    <Globe size={10} /> Apercu Google
+                  </p>
+                  <div className="space-y-1">
+                    <div className="text-[11px] text-gray-500 flex items-center gap-1">
+                      <span className="inline-block h-4 w-4 rounded-full bg-gradient-to-br from-blue-500 to-purple-500" />
+                      verkingscolaire.dz / produit / {(current.name_fr || 'produit').toLowerCase().replace(/\s+/g, '-').slice(0, 30)}
+                    </div>
+                    <div className="text-xl font-medium leading-tight text-[#1a0dab] hover:underline cursor-pointer line-clamp-2">
+                      {current.meta_title || current.name_fr || 'Titre du produit'}
+                    </div>
+                    <div className="text-[13px] text-gray-600 leading-snug line-clamp-3">
+                      {current.meta_description || current.description_fr || 'La description apparaitra ici. Remplissez Meta Description pour un meilleur controle.'}
+                    </div>
+                  </div>
                 </div>
+
                 <div>
                   <label className={labelCls}>Tags / Mots-cles</label>
-                  <input className={inputCls} value={(current.tags || []).join(', ')} onChange={e => field('tags', e.target.value.split(',').map(tag => tag.trim()).filter(Boolean))} />
+                  <input className={inputCls} value={(current.tags || []).join(', ')} onChange={e => field('tags', e.target.value.split(',').map(tag => tag.trim()).filter(Boolean))} placeholder="cartable, rentree scolaire, primaire..." />
+                  <p className={`text-[11px] mt-1 ${t.textMuted}`}>Separez les mots-cles par des virgules.</p>
                 </div>
               </div>
             )}
@@ -698,9 +928,12 @@ export function ProductEditor(props: ProductEditorProps) {
             {activeTab === 'analytics' && (
               <div className="space-y-5">
                 {mode === 'add' ? (
-                  <div className={`py-16 text-center ${t.textMuted}`}>
-                    <BarChart2 size={40} className="mx-auto mb-3 opacity-20" />
-                    <p>Analytics disponibles apres creation</p>
+                  <div className={`rounded-2xl border border-dashed ${t.cardBorder} p-10 text-center`}>
+                    <BarChart2 size={44} className={`mx-auto mb-3 ${t.textMuted} opacity-40`} />
+                    <p className={`text-sm font-black ${t.text}`}>Analytics disponibles apres publication</p>
+                    <p className={`mt-1 text-xs ${t.textMuted}`}>
+                      Les vues, commandes, revenus et mouvements de stock apparaitront ici des que ce produit aura ete cree.
+                    </p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-4">
@@ -724,6 +957,81 @@ export function ProductEditor(props: ProductEditorProps) {
                 )}
               </div>
             )}
+              </div>
+            </div>
+
+            <aside className={`hidden lg:flex flex-col border-l ${t.divider} ${isDark ? 'bg-gray-900/40' : 'bg-gradient-to-b from-slate-50/80 to-white'}`}>
+              <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+                <p className={`text-[11px] font-black uppercase tracking-wider ${t.textMuted} flex items-center gap-1.5`}>
+                  <Eye size={11} /> Apercu live
+                </p>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                  {mode === 'add' ? 'Brouillon' : 'Edition'}
+                </span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="rounded-2xl bg-white p-2 shadow-sm ring-1 ring-black/5">
+                  {Array.isArray(current.images) && current.images.length > 0 ? (
+                    <ProductCard
+                      product={{
+                        id: (current.id as string) || 'preview-draft',
+                        name_fr: current.name_fr || 'Nom du produit',
+                        name_ar: current.name_ar || 'اسم المنتج',
+                        price: typeof current.price === 'number' ? current.price : 0,
+                        sale_price: typeof current.sale_price === 'number' ? current.sale_price : undefined,
+                        images: current.images,
+                        stock: typeof current.stock === 'number' ? current.stock : 0,
+                        is_active: current.is_active !== false,
+                        is_featured: !!current.is_featured,
+                        is_new: !!current.is_new,
+                        is_best_seller: !!current.is_best_seller,
+                        is_promo: !!current.is_promo,
+                        category_id: current.category_id,
+                      } as any}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 p-8 text-center">
+                      <ImageOff size={28} className="text-gray-300" />
+                      <p className="text-xs font-bold text-gray-500">Ajoutez une image</p>
+                      <p className="text-[10px] text-gray-400">L apercu apparaitra des qu une image est disponible.</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className={`rounded-2xl border ${t.cardBorder} bg-white p-3`}>
+                  <p className={`text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>
+                    Completude ({readiness.score}%)
+                  </p>
+                  <ul className="space-y-1.5">
+                    {readiness.checks.map((c) => (
+                      <li key={c.key} className="flex items-center gap-2 text-[11px]">
+                        <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full ${c.done ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                          {c.done ? <Check size={10} /> : null}
+                        </span>
+                        <span className={`flex-1 font-semibold ${c.done ? 'text-gray-700' : 'text-gray-500'}`}>{c.label}</span>
+                        {c.required && !c.done && (
+                          <span className="text-[9px] font-black text-rose-600">REQUIS</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className={`rounded-2xl border ${t.cardBorder} bg-white p-3`}>
+                  <p className={`text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>
+                    Visible dans
+                  </p>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {placements.map((p, i) => (
+                      <li key={i} className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-[#1A3C6E]">
+                        {p}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </aside>
           </div>
         </div>
 
