@@ -57,6 +57,9 @@ import MobileSearchManager from "./pages/admin/mobile/MobileSearchManager";
 import MobilePushManager from "./pages/admin/mobile/MobilePushManager";
 import MobileQuickChipsManager from "./pages/admin/mobile/MobileQuickChipsManager";
 import MobileUsersManager from "./pages/admin/mobile/MobileUsersManager";
+import MobilePagesManager from "./pages/admin/mobile/MobilePagesManager";
+import MobileComingSoonManager from "./pages/admin/mobile/MobileComingSoonManager";
+import MobileTagsPoolManager from "./pages/admin/mobile/MobileTagsPoolManager";
 import { VirtualStore } from "./pages/experience/VirtualStore";
 
 export const router = createBrowserRouter([
@@ -140,6 +143,9 @@ export const router = createBrowserRouter([
           { path: "push",         Component: MobilePushManager },
           { path: "quick-chips",  Component: MobileQuickChipsManager },
           { path: "users",        Component: MobileUsersManager },
+          { path: "pages",        Component: MobilePagesManager },
+          { path: "coming-soon",  Component: MobileComingSoonManager },
+          { path: "tags-pool",    Component: MobileTagsPoolManager },
         ],
       },
     ],

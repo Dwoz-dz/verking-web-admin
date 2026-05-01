@@ -1274,3 +1274,144 @@ export async function sendPushCampaign(id: string, token: string | null): Promis
   const res = await call<{ ok: true; recipients: number; sent: number; failed: number; message?: string }>('push-campaign-send', { id }, token);
   return { recipients: res.recipients, sent: res.sent, failed: res.failed, message: res.message };
 }
+
+
+// ─── Phase Final-2 — Admin UI editors for the new tables ───────────────
+
+// mobile_pages (Help / FAQ / Privacy / Terms admin-driven content)
+export interface MobilePageRow {
+  slug: string;
+  title_fr: string;
+  title_ar: string | null;
+  body_fr: string;
+  body_ar: string | null;
+  is_published: boolean;
+  updated_at: string;
+}
+export interface MobilePagePatch {
+  slug: string;
+  title_fr: string;
+  title_ar?: string | null;
+  body_fr: string;
+  body_ar?: string | null;
+  is_published?: boolean;
+}
+export async function listAllMobilePages(token: string | null): Promise<MobilePageRow[]> {
+  const res = await call<{ ok: true; pages: MobilePageRow[] }>('pages-list-all', {}, token);
+  return res.pages ?? [];
+}
+export async function upsertMobilePage(patch: MobilePagePatch, token: string | null): Promise<void> {
+  await call('page-upsert', patch, token);
+}
+export async function deleteMobilePage(slug: string, token: string | null): Promise<void> {
+  await call('page-delete', { slug }, token);
+}
+
+// mobile_coming_soon_config (single 'default' row)
+export interface ComingSoonConfigRow {
+  id: string;
+  enabled: boolean;
+  banner_text_fr: string | null;
+  banner_text_ar: string | null;
+  banner_emoji: string;
+  expected_launch_date: string | null;
+  pool_titles_fr: string[];
+  pool_titles_ar: string[];
+  pool_emojis: string[];
+  show_notify_cta: boolean;
+  min_grid_slots: number;
+  category_overrides: Record<string, unknown>;
+  updated_at: string;
+}
+export interface ComingSoonConfigPatch {
+  enabled?: boolean;
+  banner_text_fr?: string | null;
+  banner_text_ar?: string | null;
+  banner_emoji?: string;
+  expected_launch_date?: string | null;
+  pool_titles_fr?: string[];
+  pool_titles_ar?: string[];
+  pool_emojis?: string[];
+  show_notify_cta?: boolean;
+  min_grid_slots?: number;
+  category_overrides?: Record<string, unknown>;
+}
+export async function getComingSoonConfig(token: string | null): Promise<ComingSoonConfigRow | null> {
+  const res = await call<{ ok: true; config: ComingSoonConfigRow | null }>('coming-soon-get', {}, token);
+  return res.config;
+}
+export async function upsertComingSoonConfig(patch: ComingSoonConfigPatch, token: string | null): Promise<void> {
+  await call('coming-soon-upsert', patch, token);
+}
+
+// mobile_user_tags_pool
+export interface TagPoolRow {
+  tag: string;
+  label_fr: string;
+  label_ar: string | null;
+  description_fr: string | null;
+  description_ar: string | null;
+  emoji: string | null;
+  accent_color: string | null;
+  sort_order: number;
+  is_active: boolean;
+  updated_at: string;
+}
+export interface TagPoolPatch {
+  tag: string;
+  label_fr?: string;
+  label_ar?: string | null;
+  description_fr?: string | null;
+  description_ar?: string | null;
+  emoji?: string | null;
+  accent_color?: string | null;
+  sort_order?: number;
+  is_active?: boolean;
+}
+export async function listAllTagPool(token: string | null): Promise<TagPoolRow[]> {
+  const res = await call<{ ok: true; tags: TagPoolRow[] }>('tags-pool-list-all', {}, token);
+  return res.tags ?? [];
+}
+export async function upsertTagPool(patch: TagPoolPatch, token: string | null): Promise<void> {
+  await call('tag-pool-upsert', patch, token);
+}
+export async function deleteTagPool(tag: string, token: string | null): Promise<void> {
+  await call('tag-pool-delete', { tag }, token);
+}
+
+// mobile_settings_schema (per-group rows)
+export interface SettingsSchemaItem {
+  key: string;
+  type: 'link' | 'toggle' | 'value' | 'separator';
+  icon?: string;
+  label_fr: string;
+  label_ar: string;
+  label_en?: string;
+  is_visible?: boolean;
+}
+export interface SettingsSchemaGroupRow {
+  group_key: string;
+  group_label_fr: string;
+  group_label_ar: string;
+  group_label_en: string | null;
+  is_visible: boolean;
+  sort_order: number;
+  items: SettingsSchemaItem[];
+  updated_at: string;
+}
+export interface SettingsSchemaGroupPatch {
+  group_key: string;
+  group_label_fr?: string;
+  group_label_ar?: string;
+  group_label_en?: string | null;
+  is_visible?: boolean;
+  sort_order?: number;
+  items?: SettingsSchemaItem[];
+}
+export async function listAllSettingsSchema(token: string | null): Promise<SettingsSchemaGroupRow[]> {
+  const res = await call<{ ok: true; groups: SettingsSchemaGroupRow[] }>('settings-schema-list-all', {}, token);
+  return res.groups ?? [];
+}
+export async function upsertSettingsSchemaGroup(patch: SettingsSchemaGroupPatch, token: string | null): Promise<void> {
+  await call('settings-schema-upsert', patch, token);
+}

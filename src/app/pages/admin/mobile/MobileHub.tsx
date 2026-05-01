@@ -10,6 +10,7 @@ import { Link } from 'react-router';
 import {
   BarChart3, Image as ImageIcon, Layers, Palette,
   Settings as SettingsIcon, ArrowRight, Truck, Ticket, Zap, BookmarkIcon, Sparkles, ShieldCheck, Trophy, GraduationCap, Search, Bell,
+  BookOpen, Rocket, Tag,
 } from 'lucide-react';
 import { useAdminUI } from '../../../context/AdminUIContext';
 
@@ -141,6 +142,27 @@ const MODULES: ModuleCard[] = [
     description: 'Liste des inscrits, demandes de récupération, top performers, tags & segments. CRM complet.',
     icon: Trophy,
     from: '#2D7DD2', to_color: '#7C5DDB',
+  },
+  {
+    to: '/admin/mobile/pages',
+    title: '📄 Pages d\'info',
+    description: 'Centre d\'aide, FAQ, Confidentialité et Conditions — contenu admin-driven, mis à jour en temps réel.',
+    icon: BookOpen,
+    from: '#3B82F6', to_color: '#1D4ED8',
+  },
+  {
+    to: '/admin/mobile/coming-soon',
+    title: '🚀 Coming Soon Cards',
+    description: 'Configurez les placeholders affichés sur les rails vides — pool de messages, emojis, countdown.',
+    icon: Rocket,
+    from: '#7C5DDB', to_color: '#5034A8',
+  },
+  {
+    to: '/admin/mobile/tags-pool',
+    title: '🏷️ Pool de tags',
+    description: 'Tags suggérés (vip / parent / school_buyer…) dans le picker de la fiche utilisateur.',
+    icon: Tag,
+    from: '#F472B6', to_color: '#BE185D',
   },
 ];
 

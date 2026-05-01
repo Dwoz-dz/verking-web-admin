@@ -293,6 +293,44 @@ const QUICK_CHIPS_COLUMNS = new Set([
   "is_active", "sort_order",
 ]);
 
+// Phase Final-2 — admin-driven mobile_pages (Help / FAQ / Privacy / Terms)
+const PAGE_COLUMNS = new Set([
+  "slug",
+  "title_fr", "title_ar",
+  "body_fr", "body_ar",
+  "is_published",
+]);
+
+// Phase Final-2 — coming soon config (single 'default' row)
+const COMING_SOON_COLUMNS = new Set([
+  "enabled",
+  "banner_text_fr", "banner_text_ar",
+  "banner_emoji",
+  "expected_launch_date",
+  "pool_titles_fr", "pool_titles_ar",
+  "pool_emojis",
+  "show_notify_cta",
+  "min_grid_slots",
+  "category_overrides",
+]);
+
+// Phase Final-2 — user tags pool admin allow-list
+const TAG_POOL_COLUMNS = new Set([
+  "tag",
+  "label_fr", "label_ar",
+  "description_fr", "description_ar",
+  "emoji", "accent_color",
+  "sort_order", "is_active",
+]);
+
+// Phase Final-2 — settings schema admin allow-list (per-group rows)
+const SETTINGS_SCHEMA_COLUMNS = new Set([
+  "group_key",
+  "group_label_fr", "group_label_ar", "group_label_en",
+  "is_visible", "sort_order",
+  "items",
+]);
+
 // (constants and regex are imported from ./validators.ts)
 const DEVICE_ID_MAX = 128;
 
@@ -1296,6 +1334,148 @@ Deno.serve(async (req: Request) => {
         .eq("id", id);
       if (dErr) return err("WRITE_FAILED", dErr.message, 500);
       return ok({ deleted_id: id });
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // Phase Final-2 — admin editors for the new tables.
+    // ──────────────────────────────────────────────────────────────
+
+    case "pages-list-all": {
+      const { data, error: e } = await supabase
+        .from("mobile_pages")
+        .select("*")
+        .order("slug", { ascending: true });
+      if (e) return err("LOOKUP_FAILED", e.message, 500);
+      return ok({ pages: data ?? [] });
+    }
+
+    case "page-upsert": {
+      const slug = typeof body?.slug === "string" ? body.slug.trim().toLowerCase() : "";
+      if (!/^[a-z][a-z0-9-]{0,63}$/.test(slug)) {
+        return err("INVALID_SLUG", "slug must be lowercase letters/digits/dash, 1..64 chars.");
+      }
+      const patch = pick(body || {}, PAGE_COLUMNS);
+      if (!patch.title_fr || typeof patch.title_fr !== "string") {
+        return err("MISSING_TITLE", "title_fr is required.");
+      }
+      if (!patch.body_fr || typeof patch.body_fr !== "string") {
+        return err("MISSING_BODY", "body_fr is required.");
+      }
+      patch.slug = slug;
+      patch.updated_at = new Date().toISOString();
+      const { error: uErr } = await supabase
+        .from("mobile_pages")
+        .upsert(patch, { onConflict: "slug" });
+      if (uErr) return err("WRITE_FAILED", uErr.message, 500);
+      return ok({ slug });
+    }
+
+    case "page-delete": {
+      const slug = typeof body?.slug === "string" ? body.slug.trim() : "";
+      if (!slug) return err("MISSING_SLUG", "slug is required.");
+      const { error: dErr } = await supabase
+        .from("mobile_pages")
+        .delete()
+        .eq("slug", slug);
+      if (dErr) return err("WRITE_FAILED", dErr.message, 500);
+      return ok({ deleted_slug: slug });
+    }
+
+    case "coming-soon-get": {
+      const { data, error: e } = await supabase
+        .from("mobile_coming_soon_config")
+        .select("*")
+        .eq("id", "default")
+        .maybeSingle();
+      if (e) return err("LOOKUP_FAILED", e.message, 500);
+      return ok({ config: data });
+    }
+
+    case "coming-soon-upsert": {
+      const patch = pick(body || {}, COMING_SOON_COLUMNS);
+      // Numeric / shape sanity.
+      if ("min_grid_slots" in patch) {
+        const n = Number(patch.min_grid_slots);
+        if (!Number.isFinite(n) || n < 0 || n > 50) {
+          return err("INVALID_MIN_SLOTS", "min_grid_slots must be 0..50.");
+        }
+      }
+      for (const arrKey of ["pool_titles_fr", "pool_titles_ar", "pool_emojis"]) {
+        if (arrKey in patch && !Array.isArray(patch[arrKey])) {
+          return err("INVALID_ARRAY", `${arrKey} must be an array.`);
+        }
+      }
+      if ("expected_launch_date" in patch && patch.expected_launch_date != null) {
+        const v = String(patch.expected_launch_date);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+          return err("INVALID_DATE", "expected_launch_date must be 'YYYY-MM-DD' or null.");
+        }
+      }
+      patch.updated_at = new Date().toISOString();
+      const { error: uErr } = await supabase
+        .from("mobile_coming_soon_config")
+        .upsert({ id: "default", ...patch }, { onConflict: "id" });
+      if (uErr) return err("WRITE_FAILED", uErr.message, 500);
+      return ok({ updated: Object.keys(patch).length });
+    }
+
+    case "tags-pool-list-all": {
+      const { data, error: e } = await supabase
+        .from("mobile_user_tags_pool")
+        .select("*")
+        .order("sort_order", { ascending: true });
+      if (e) return err("LOOKUP_FAILED", e.message, 500);
+      return ok({ tags: data ?? [] });
+    }
+
+    case "tag-pool-upsert": {
+      const tag = typeof body?.tag === "string" ? body.tag.trim().toLowerCase() : "";
+      if (!/^[a-z][a-z0-9_]{0,31}$/.test(tag)) {
+        return err("INVALID_TAG", "tag must be lowercase letters/digits/underscore, 1..32 chars.");
+      }
+      const patch = pick(body || {}, TAG_POOL_COLUMNS);
+      patch.tag = tag;
+      patch.updated_at = new Date().toISOString();
+      const { error: uErr } = await supabase
+        .from("mobile_user_tags_pool")
+        .upsert(patch, { onConflict: "tag" });
+      if (uErr) return err("WRITE_FAILED", uErr.message, 500);
+      return ok({ tag });
+    }
+
+    case "tag-pool-delete": {
+      const tag = typeof body?.tag === "string" ? body.tag.trim() : "";
+      if (!tag) return err("MISSING_TAG", "tag is required.");
+      const { error: dErr } = await supabase
+        .from("mobile_user_tags_pool")
+        .delete()
+        .eq("tag", tag);
+      if (dErr) return err("WRITE_FAILED", dErr.message, 500);
+      return ok({ deleted_tag: tag });
+    }
+
+    case "settings-schema-list-all": {
+      const { data, error: e } = await supabase
+        .from("mobile_settings_schema")
+        .select("*")
+        .order("sort_order", { ascending: true });
+      if (e) return err("LOOKUP_FAILED", e.message, 500);
+      return ok({ groups: data ?? [] });
+    }
+
+    case "settings-schema-upsert": {
+      const group_key = typeof body?.group_key === "string" ? body.group_key.trim() : "";
+      if (!/^[a-z][a-z0-9_]{0,31}$/.test(group_key)) {
+        return err("INVALID_GROUP_KEY", "group_key must be lowercase letters/digits/underscore.");
+      }
+      const patch = pick(body || {}, SETTINGS_SCHEMA_COLUMNS);
+      patch.group_key = group_key;
+      patch.updated_at = new Date().toISOString();
+      const { error: uErr } = await supabase
+        .from("mobile_settings_schema")
+        .upsert(patch, { onConflict: "group_key" });
+      if (uErr) return err("WRITE_FAILED", uErr.message, 500);
+      return ok({ group_key });
     }
 
     default:
