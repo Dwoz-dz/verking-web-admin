@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { TagPickerModal } from '../../../components/admin/TagPickerModal';
 import { useAdminUI } from '../../../context/AdminUIContext';
 import { useAuth } from '../../../context/AuthContext';
 import {
@@ -132,9 +133,11 @@ export function MobileUsersManager() {
     }
   };
 
-  const onAddTag = () => {
-    const tag = window.prompt('Tag à ajouter (vip, parent, school_buyer…):');
-    if (!tag?.trim()) return;
+  // Phase Final — branded picker (was window.prompt). Pulls suggestions
+  // from `mobile_user_tags_pool` and still allows free-form custom tags.
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const onAddTag = () => setTagPickerOpen(true);
+  const onAddTagPicked = (tag: string) => {
     void runAction('add_tag', { tag: tag.trim().toLowerCase() });
   };
   const onRemoveTag = (tag: string) => void runAction('remove_tag', { tag });
@@ -373,6 +376,14 @@ export function MobileUsersManager() {
       ) : (
         <TopPerformersTab t={t} />
       )}
+
+      {/* Phase Final — branded tag picker (replaces window.prompt). */}
+      <TagPickerModal
+        open={tagPickerOpen}
+        onClose={() => setTagPickerOpen(false)}
+        alreadyAdded={details?.profile?.tags ?? []}
+        onAddTag={onAddTagPicked}
+      />
     </div>
   );
 }
