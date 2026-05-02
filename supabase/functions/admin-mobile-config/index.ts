@@ -339,10 +339,26 @@ const DEVICE_ID_MAX = 128;
 // violation, or null if the patch is valid.
 
 // Validate the admin token by calling the existing make-server-ea36795c
-// /admin/verify. Cached for 60s per token to avoid hammering it on burst
+// /admin/verify. Cached for 30s per token to avoid hammering it on burst
 // requests (e.g. drag-and-drop saves).
+//
+// IMPORTANT: We ONLY cache positive verifications. A single transient
+// failure of /admin/verify (cold-start, DNS blip, gateway proxy hiccup)
+// used to poison the cache with `ok: false` for the full TTL window —
+// every subsequent admin call within 60s would be rejected even though
+// the token was perfectly valid. The frontend's verify-then-retry
+// pattern couldn't recover because the direct verify call would succeed
+// while THIS function's cached `false` kept rejecting requests. That
+// produced the symptom "Admin token rejected" toast with no SessionExpired
+// modal triggered, which exactly matched the bug we were chasing.
+//
+// Fix: only positive results are cached. Failures simply re-verify on
+// the next request — at the cost of one extra verify call, but with
+// guaranteed self-healing behaviour. Also: in-flight dedup so 5 parallel
+// admin calls only hit /admin/verify once.
 const tokenCache = new Map<string, { ok: boolean; expires_at: number }>();
-const TOKEN_TTL_MS = 60_000;
+const tokenInflight = new Map<string, Promise<boolean>>();
+const TOKEN_TTL_MS = 30_000;
 
 async function verifyAdminToken(
   supabaseUrl: string,
@@ -351,26 +367,47 @@ async function verifyAdminToken(
 ): Promise<boolean> {
   const now = Date.now();
   const cached = tokenCache.get(token);
-  if (cached && cached.expires_at > now) return cached.ok;
+  // Fast path: we have a recent SUCCESSFUL verification → trust it.
+  if (cached && cached.ok && cached.expires_at > now) return true;
+
+  // Coalesce concurrent verify calls for the same token so 10 parallel
+  // admin requests still only hit /admin/verify once.
+  const inflight = tokenInflight.get(token);
+  if (inflight) return inflight;
 
   const url = `${supabaseUrl}/functions/v1/make-server-ea36795c/admin/verify`;
-  let isOk = false;
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "content-type": "application/json",
-        "authorization": `Bearer ${anonKey}`,
-        "apikey": anonKey,
-        "x-admin-token": token,
-      },
-    });
-    isOk = res.ok;
-  } catch (e) {
-    console.warn("verify call failed:", e);
-    isOk = false;
-  }
-  tokenCache.set(token, { ok: isOk, expires_at: now + TOKEN_TTL_MS });
-  return isOk;
+  const verifyPromise = (async () => {
+    let isOk = false;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          "content-type": "application/json",
+          "authorization": `Bearer ${anonKey}`,
+          "apikey": anonKey,
+          "x-admin-token": token,
+        },
+      });
+      isOk = res.ok;
+    } catch (e) {
+      console.warn("verify call failed:", e);
+      isOk = false;
+    }
+    if (isOk) {
+      // Cache only successful verifications. See block comment above.
+      tokenCache.set(token, { ok: true, expires_at: Date.now() + TOKEN_TTL_MS });
+    } else {
+      // On failure, EVICT any stale positive entry so the next call
+      // re-verifies cleanly. Never store a negative.
+      tokenCache.delete(token);
+    }
+    return isOk;
+  })().finally(() => {
+    // Allow the next caller to re-verify if needed.
+    tokenInflight.delete(token);
+  });
+
+  tokenInflight.set(token, verifyPromise);
+  return verifyPromise;
 }
 
 Deno.serve(async (req: Request) => {

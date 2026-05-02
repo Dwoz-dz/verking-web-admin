@@ -88,7 +88,19 @@ async function call<T extends OkResponse>(
 
   let { res, parsed } = await executeCall<T>(route, body, token);
 
-  // Phase 1.5 — on 401, verify before nuking the session, retry once.
+  // Audit fix (2026-05-02):
+  //   Old behaviour: on 401, verify the token directly. If verify
+  //   succeeds, retry once. If retry STILL fails, throw silently —
+  //   leaving the user staring at "Admin token rejected" toast with
+  //   no way to recover (modal never opens, retry button absent).
+  //
+  //   New behaviour:
+  //   ▸ verify ok + retry ok → return data (false-positive recovered)
+  //   ▸ verify ok + retry STILL 401 → assume backend is degraded but
+  //     token is fine; surface a softer "Réessayez dans un instant"
+  //     error so the page can retry on its own
+  //   ▸ verify 401 → token is dead; dispatch logout + still throw
+  //     (AuthContext catches event and renders SessionExpiredModal).
   if (res.status === 401) {
     const stillValid = await isTokenStillValid(token);
     if (stillValid) {
@@ -96,10 +108,23 @@ async function call<T extends OkResponse>(
       const retry = await executeCall<T>(route, body, token);
       res = retry.res;
       parsed = retry.parsed;
+      if (res.status === 401) {
+        // Still 401 after a confirmed-valid token → backend is
+        // degraded (e.g. an admin-mobile-config instance with a
+        // poisoned cache). The frontend can't fix it, but the user
+        // is NOT logged out — show a softer message so the page can
+        // re-render after a moment.
+        throw new Error('Service temporairement indisponible. Réessayez dans un instant.');
+      }
     } else {
       // Confirmed expired → trigger session-expired modal via the
-      // existing event the AuthContext already listens to.
+      // existing event AuthContext already listens to. AuthContext
+      // sets `sessionExpired = true` AND calls `logout()` so the modal
+      // renders on top of the current page (no redirect, no work lost).
       window.dispatchEvent(new Event('vk_admin_logout'));
+      // Throw a clean message so per-page error toasts don't say
+      // "Admin token rejected" — the modal is the source of truth now.
+      throw new Error('Session expirée. Reconnectez-vous via la fenêtre qui vient de s\'ouvrir.');
     }
   }
 

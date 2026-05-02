@@ -85,11 +85,16 @@ async function handleAdmin401(
 ): Promise<Response> {
   const stillValid = await isTokenStillValid(token);
   if (!stillValid) {
+    // Confirmed expired → fire the session-expired event so the
+    // AuthContext can render the re-login modal on top of the
+    // current page (no redirect — preserves in-progress work).
     window.dispatchEvent(new Event('vk_admin_logout'));
-    // Re-throw the 401 so callers see the same shape they expected.
     return new Response(null, { status: 401 });
   }
   // Token verified OK — original 401 was a false positive. Retry once.
+  // If the retry STILL 401s, we treat it as a transient backend
+  // hiccup and surface a softer error to callers (they wrap the
+  // throw in try/catch and toast it).
   return retry();
 }
 

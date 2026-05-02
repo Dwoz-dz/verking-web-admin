@@ -1,31 +1,82 @@
 import * as kv from "./kv_store.tsx";
 import { db, useDB, respond, errRes, uid } from "./db.ts";
 
+// Robust admin token verification.
+//
+// Token formats accepted (in priority order):
+//   1. `vk_session:<admin_uuid>:<nonce>` — issued by DB-based login.
+//      Verified by checking `admin_users.is_active = true` for the uuid.
+//      The nonce is opaque and not validated (any random string works).
+//   2. KV legacy token (`config.token`) — only used when no DB session
+//      token format is detected. Keeps the bootstrap admin alive even
+//      if the admin_users table is unreachable.
+//
+// Audit fix (2026-05-02):
+//   The old chain had a fall-through: if the DB probe failed for any
+//   reason (cold-start blip, momentary network hiccup), `useDB()`
+//   returned false and we silently fell into the KV branch — which
+//   ALWAYS rejected `vk_session:...` tokens because they don't match
+//   the legacy hardcoded constant. Result: a transient 100ms blip
+//   permanently locked an edge-function instance into rejecting every
+//   valid admin token until that instance was recycled.
+//
+// New chain:
+//   ▸ If the token LOOKS like vk_session, we ALWAYS check the DB —
+//     directly via the service-role client, no `useDB()` gate. The
+//     gate was decorative anyway (the DB check itself confirms
+//     reachability). If the DB returns a row with is_active=true, ok.
+//     If the DB query errors, we log + reject (token can't be verified
+//     right now — the frontend will retry).
+//   ▸ Otherwise (legacy token shape), we check KV.
+//   ▸ If both branches fail, we reject.
+//
+// Result: a transient DB blip surfaces as a single 401, not a
+// permanently-broken session.
 export async function isAdmin(c: any): Promise<boolean> {
   const token = c.req.header("X-Admin-Token");
   if (!token) return false;
 
-  try {
-    // Check for DB-based session first
-    if (await useDB()) {
-      try {
-        const parts = token.split(':');
-        if (parts.length >= 3 && parts[0] === 'vk_session') {
-          const { data, error } = await db.from('admin_users').select('id, is_active').eq('id', parts[1]).single();
-          if (!error && data?.is_active) return true;
-        }
-      } catch (e) {
-        console.error("Auth check DB error:", e);
-      }
+  // ── Path 1: vk_session token → always check admin_users via service role ──
+  const parts = token.split(':');
+  if (parts.length >= 3 && parts[0] === 'vk_session') {
+    const adminId = parts[1];
+    if (!adminId) {
+      console.warn('isAdmin: malformed vk_session token (no admin id)');
+      return false;
     }
+    try {
+      const { data, error } = await db
+        .from('admin_users')
+        .select('id, is_active')
+        .eq('id', adminId)
+        .maybeSingle();
+      if (error) {
+        console.warn('isAdmin: admin_users lookup error:', error.message);
+        return false;
+      }
+      if (!data) {
+        console.warn(`isAdmin: no admin row for id ${adminId}`);
+        return false;
+      }
+      if (!data.is_active) {
+        console.warn(`isAdmin: admin ${adminId} is inactive`);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error('isAdmin: DB lookup threw:', e);
+      return false;
+    }
+  }
 
-    // KV / legacy token fallback
+  // ── Path 2: legacy KV-stored bootstrap token ──
+  try {
     const configStr = await kv.get("admin:config");
     const config = configStr ? JSON.parse(configStr) : { token: "vk-admin-secure-token-2024" };
     return token === config.token;
   } catch (e) {
-    console.error("Auth helper general error:", e);
-    // Ultimate fallback for emergency access if KV is down but we have the default token
+    console.error('isAdmin: KV lookup threw:', e);
+    // Ultimate fallback for emergency bootstrap access only.
     return token === "vk-admin-secure-token-2024";
   }
 }
