@@ -534,7 +534,7 @@ function AdminLogin() {
 }
 
 function AdminPanelInner() {
-  const { isAdmin, logout, isInitializing } = useAuth();
+  const { isAdmin, logout, resetSession, isInitializing } = useAuth();
   const { isDark, toggleDark, t } = useAdminUI();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
@@ -700,6 +700,23 @@ function AdminPanelInner() {
           >
             <LogOut size={14} />
             <span className="flex-1 text-left">Déconnexion</span>
+          </button>
+
+          {/* Audit 2026-05-02 — debug recovery: hard-clear all storage
+              + reload to /admin/login. Use when the admin sees a stale-
+              token toast loop they can't escape from. */}
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm('Réinitialiser la session ?\n\nCette action efface le token stocké et recharge la page de connexion. Utile si vous voyez « Impossible de charger… » en boucle.')) {
+                resetSession();
+              }
+            }}
+            className="mt-1 flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-[11px] font-bold text-yellow-200/80 hover:bg-yellow-500/15 transition-colors min-h-[40px]"
+            title="Force-clear localStorage + sessionStorage and reload /admin/login"
+          >
+            <Sparkles size={12} />
+            <span className="flex-1 text-left">Réinitialiser la session</span>
           </button>
         </div>
       </aside>

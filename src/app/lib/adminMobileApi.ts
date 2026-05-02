@@ -14,6 +14,7 @@
  *   See `lib/api.ts` for the same pattern on the legacy admin endpoints.
  */
 import { projectId, publicAnonKey } from '/utils/supabase/info';
+import { clearAdminSession } from './session';
 
 const ENDPOINT = `https://${projectId}.supabase.co/functions/v1/admin-mobile-config`;
 const VERIFY_ENDPOINT = `https://${projectId}.supabase.co/functions/v1/make-server-ea36795c/admin/verify`;
@@ -117,13 +118,13 @@ async function call<T extends OkResponse>(
         throw new Error('Service temporairement indisponible. Réessayez dans un instant.');
       }
     } else {
-      // Confirmed expired → trigger session-expired modal via the
-      // existing event AuthContext already listens to. AuthContext
-      // sets `sessionExpired = true` AND calls `logout()` so the modal
-      // renders on top of the current page (no redirect, no work lost).
+      // Confirmed expired → wipe storage IMMEDIATELY so any in-flight
+      // parallel call can't keep retrying with the dead token. Then
+      // dispatch the event so AuthContext flips `sessionExpired=true`
+      // and the modal renders on top of the current page.
+      console.warn('[adminMobileApi] 401 confirmed expired — clearing session');
+      clearAdminSession('adminMobileApi-401-confirmed');
       window.dispatchEvent(new Event('vk_admin_logout'));
-      // Throw a clean message so per-page error toasts don't say
-      // "Admin token rejected" — the modal is the source of truth now.
       throw new Error('Session expirée. Reconnectez-vous via la fenêtre qui vient de s\'ouvrir.');
     }
   }

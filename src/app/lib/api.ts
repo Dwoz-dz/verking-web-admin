@@ -1,4 +1,5 @@
 import { projectId, publicAnonKey } from '/utils/supabase/info';
+import { clearAdminSession } from './session';
 
 export const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-ea36795c`;
 
@@ -85,16 +86,15 @@ async function handleAdmin401(
 ): Promise<Response> {
   const stillValid = await isTokenStillValid(token);
   if (!stillValid) {
-    // Confirmed expired → fire the session-expired event so the
-    // AuthContext can render the re-login modal on top of the
-    // current page (no redirect — preserves in-progress work).
+    // Confirmed expired → wipe storage immediately + signal the
+    // AuthContext. Any parallel admin calls in flight will short-
+    // circuit on their next 401 because the token is already gone.
+    console.warn('[api] 401 confirmed expired — clearing session');
+    clearAdminSession('api-401-confirmed');
     window.dispatchEvent(new Event('vk_admin_logout'));
     return new Response(null, { status: 401 });
   }
   // Token verified OK — original 401 was a false positive. Retry once.
-  // If the retry STILL 401s, we treat it as a transient backend
-  // hiccup and surface a softer error to callers (they wrap the
-  // throw in try/catch and toast it).
   return retry();
 }
 

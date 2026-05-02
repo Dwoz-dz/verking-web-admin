@@ -46,6 +46,7 @@ seedIfEmpty();
 // ── AUTH ROUTES ──
 app.post("/make-server-ea36795c/admin/login", auth.handleLogin);
 app.get("/make-server-ea36795c/admin/verify", auth.handleVerify);
+app.post("/make-server-ea36795c/admin/logout", auth.handleLogout);
 app.put("/make-server-ea36795c/admin/password", auth.handleUpdatePassword);
 
 // ── PRODUCT ROUTES ──
